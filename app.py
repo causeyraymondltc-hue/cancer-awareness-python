@@ -130,6 +130,84 @@ with tab_prevention:
 # ==========================================
 # TAB 2: EDUCATIONAL ML DEMO
 # ==========================================
+
+    # ==========================================
+    # NEW ADDED FEATURE: Multi-Factor Risk Questionnaire
+    # ==========================================
+    st.divider()
+    st.subheader("🔍 Advanced Awareness Calculator")
+    st.info("Answer these questions for an expanded educational profile. Not clinical.")
+
+    with st.form("advanced_risk"):
+        st.write("**Lifestyle & Health Factors**")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            a_age = st.slider("Age", 18, 90, 35)
+            a_smoke = st.selectbox("Smoking", ["Never", "Former (quit >10yr)", "Former (<10yr)", "Current"])
+            a_family = st.selectbox("Family History", ["None", "2nd degree", "1st degree"])
+        with c2:
+            a_alc = st.selectbox("Alcohol / Week", ["None", "1-7", "8-14", "15+"])
+            a_weight = st.selectbox("Weight (self-est)", ["Normal", "Overweight", "Obese"])
+            a_veg = st.selectbox("Veg/Fruit Daily", ["5+", "2-4", "<2"])
+        with c3:
+            a_meat = st.selectbox("Processed Meat", ["Rare/None", "1-2x/wk", "3-5x/wk", "Most days"])
+            a_sun = st.selectbox("Sun Protection", ["Always", "Sometimes", "Rarely / Burn"])
+            a_screen = st.selectbox("Screenings", ["Up to date", "Partial", "Not up to date"])
+        
+        btn = st.form_submit_button("Generate Awareness Profile")
+
+    if btn:
+        pts = 0
+        flags = []
+        if a_age > 60: pts += 15; flags.append("Age 60+")
+        elif a_age > 45: pts += 7; flags.append("Age 45+")
+        if a_smoke == "Current": pts += 25; flags.append("Smoking")
+        elif "<10yr" in a_smoke: pts += 10; flags.append("Recent former smoker")
+        if "15+" in a_alc: pts += 15; flags.append("High alcohol")
+        elif "8-14" in a_alc: pts += 8; flags.append("Moderate alcohol")
+        if "Obese" in a_weight: pts += 12; flags.append("Obesity")
+        elif "Overweight" in a_weight: pts += 6; flags.append("Overweight")
+        if "<2" in a_veg: pts += 8; flags.append("Low veg")
+        if "Most days" in a_meat: pts += 10; flags.append("High processed meat")
+        elif "3-5x/wk" in a_meat: pts += 5
+        if "Rarely" in a_sun: pts += 10; flags.append("Low sun protection")
+        elif "Sometimes" in a_sun: pts += 4
+        if "Not up to date" in a_screen: pts += 12; flags.append("Screening gap")
+        if "1st degree" in a_family: pts += 14; flags.append("1st degree family")
+        elif "2nd degree" in a_family: pts += 7
+
+        score = min(pts, 100)
+        
+        if score >= 50:
+            level, color = "Higher Awareness Profile", "red"
+        elif score >= 25:
+            level, color = "Moderate Awareness", "orange"
+        else:
+            level, color = "Lower Awareness Profile", "green"
+        
+        st.subheader(f"Profile: {level}")
+        st.progress(score / 100.0)
+        st.write(f"Score: **{score}/100**")
+        st.write("Factors noted:", ", ".join(flags) if flags else "None major flagged")
+        
+        st.subheader("Evidence-Based Actions")
+        tips = []
+        if a_smoke != "Never": tips.append(("🚭 Tobacco", "Quitting at any age reduces risk. Seek support."))
+        if "15+" in a_alc or "8-14" in a_alc: tips.append(("🍷 Alcohol", "Lower intake reduces multiple cancer risks."))
+        if "Obese" in a_weight or "Overweight" in a_weight: tips.append(("⚖️ Weight", "Healthy weight lowers risk for 13 cancer types."))
+        if "<2" in a_veg or "Most days" in a_meat or "3-5x/wk" in a_meat: tips.append(("🥗 Diet", "More plants/whole grains; less processed meat."))
+        if "Rarely" in a_sun or "Sometimes" in a_sun: tips.append(("☀️ Sun", "SPF 30+, shade, protective clothing."))
+        if "Not up to date" in a_screen: tips.append(("🩺 Screening", "Consult your GP for age-appropriate tests."))
+        if "1st degree" in a_family or "2nd degree" in a_family: tips.append(("👨‍👩‍👧 Family", "Discuss earlier/additional screening with doctor."))
+        tips.append(("💉 Vaccines", "HPV / Hep B vaccines where appropriate."))
+        tips.append(("📚 Source", "Cancer Council Australia, WHO, NCI — for education only."))
+        
+        for title, body in tips:
+            with st.container(border=True):
+                st.markdown(f"**{title}**")
+                st.write(body)
+        
+        st.warning("⚠️ **Not clinical.** This is an educational portfolio tool. Always see a healthcare provider for real risk assessment and screening.")
 with tab_research:
     st.header("Breast Cancer Dataset Explorer")
     st.info("""
