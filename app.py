@@ -15,7 +15,72 @@ st.set_page_config(
     page_icon="🩺",
     layout="centered"
 )
+# =====================
+# CUSTOMER LOGIN / REGISTER (Demo Only)
+# =====================
+if 'users' not in st.session_state:
+    # Pre-loaded demo account + empty storage for new sign-ups
+    st.session_state.users = {"demo": "password"}
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.current_user = None
 
+# If not logged in, show only the login/register screen and stop everything else
+if not st.session_state.logged_in:
+    st.title("🔐 Customer Access Portal")
+    st.caption("Demo authentication for portfolio — not a secure production system")
+    
+    login_tab, reg_tab = st.tabs(["Login", "Sign Up / Register"])
+    
+    with login_tab:
+        st.write("**Existing Customer Login**")
+        with st.form("login_form"):
+            user_in = st.text_input("Username")
+            pass_in = st.text_input("Password", type="password")
+            login_btn = st.form_submit_button("Login")
+            
+            if login_btn:
+                if user_in in st.session_state.users and st.session_state.users[user_in] == pass_in:
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = user_in
+                    st.success("Login successful! Loading app...")
+                    st.rerun()
+                else:
+                    st.error("Wrong username or password. Try: demo / password")
+    
+    with reg_tab:
+        st.write("**New Customer Sign Up**")
+        with st.form("register_form"):
+            new_user = st.text_input("Choose a username")
+            new_pass = st.text_input("Choose a password", type="password")
+            reg_btn = st.form_submit_button("Create Account")
+            
+            if reg_btn:
+                if new_user in st.session_state.users:
+                    st.error("Username already taken.")
+                elif not new_user or not new_pass:
+                    st.error("Please fill both fields.")
+                elif len(new_pass) < 4:
+                    st.warning("For demo only: password must be at least 4 characters.")
+                else:
+                    st.session_state.users[new_user] = new_pass
+                    st.success(f"Account '{new_user}' created! Now log in with the Login tab.")
+    
+    st.info("💡 **Demo credentials:** username `demo` | password `password`")
+    st.stop()  # This stops the cancer app from loading until login succeeds
+
+# =====================
+# LOGGED IN STATE: Show app + Logout option in sidebar
+# =====================
+# Show welcome message and logout button in sidebar
+with st.sidebar:
+    st.write(f"👤 Welcome, **{st.session_state.current_user}**")
+    if st.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.current_user = None
+        st.rerun()
+    st.divider()
+    st.caption("Customer Portal Active")
 # =====================
 # GLOBAL MEDICAL DISCLAIMER (Must be visible everywhere)
 # =====================
