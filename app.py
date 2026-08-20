@@ -20,15 +20,12 @@ st.set_page_config(
 # GLOBAL MEDICAL DISCLAIMER (Must be visible everywhere)
 # =====================
 st.warning("""
-⚠️ **MEDICAL DISCLAIMER:** This is an **educational portfolio project only**. 
-It is **NOT** a clinical diagnostic device, medical tool, or substitute for professional healthcare advice. 
-Always consult qualified medical professionals for diagnosis, screening, and treatment decisions. 
-Never rely on this app for real health decisions.
+ **CancerGuard AI, health data, and machine learning to help people understand cancer risk factors, discover prevention strategies, explore cancer research, and recognize when professional screening may be important..
 """)
 
-st.title("🩺 Cancer Awareness & Educational Toolkit")
-st.subheader("Built with Python • Streamlit • Scikit-Learn • Public Health Data")
-st.caption("Portfolio Project — Not for clinical use")
+st.title("🩺 Cancer Awareness & Educational Guard AI")
+st.subheader(" Turning Cancer Data Into Prevention, Awareness & Early Action")
+st.caption("CancerGuard AI was created to make cancer-related information easier to understand and explore.")
 
 # =====================
 # NAVIGATION TABS
