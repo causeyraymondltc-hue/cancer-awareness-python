@@ -22,9 +22,9 @@ st.set_page_config(
 # =====================
 st.markdown("""
 <style>
-.main { background-color: #00897B; }
+.main { background-color: #6A1B9A; }
 .block-container { padding-top: 2rem; padding-bottom: 3rem; }
-[data-testid="stSidebar"] { background-color: #E91E63; }
+[data-testid="stSidebar"] { background-color: #F5F5F5; }
 h1 { font-weight: 700; }
 h2 { font-weight: 650; }
 h3 { font-weight: 600; }
@@ -74,7 +74,7 @@ for key, value in defaults.items():
 # =====================
 if not st.session_state.logged_in:
     st.title("🔐 Customer Access Portal")
-    st.caption("Demo authentication for portfolio — not a secure production system")
+    st.caption("Early Awareness. Better Health. Brighter Future")
 
     login_tab, reg_tab = st.tabs(["Login", "Sign Up / Register"])
 
@@ -106,7 +106,7 @@ if not st.session_state.logged_in:
                     st.session_state.users[new_user] = new_pass
                     st.success(f"Account '{new_user}' created! Now log in.")
 
-    st.info(" **Demo credentials:** username `demo` | password `password`")
+    st.info(" **Healthy Choices. Stronger Future | password `password`")
     st.stop()
 
 # =====================
