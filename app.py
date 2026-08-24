@@ -11,28 +11,59 @@ import plotly.express as px
 # PAGE SETUP
 # =====================
 st.set_page_config(
-    page_title="Cancer Awareness & Research Toolkit",
+    page_title="CancerGuard AI",
     page_icon="🩺",
-    layout="centered"
+    layout="wide"
 )
 
 # =====================
-# SESSION STATE INITIALIZATION (must come before login check)
+# CUSTOM STYLING
 # =====================
-if 'users' not in st.session_state:
-    st.session_state.users = {"demo": "password"}
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-if 'current_user' not in st.session_state:
-    st.session_state.current_user = None
-if 'goals' not in st.session_state:
-    st.session_state.goals = []
-if 'score_history' not in st.session_state:
-    st.session_state.score_history = []
-if 'badges' not in st.session_state:
-    st.session_state.badges = []
-if 'demo_group' not in st.session_state:
-    st.session_state.demo_group = "Prefer not to say"
+st.markdown("""
+<style>
+.main { background-color: #F3F4F6; }
+.block-container { padding-top: 2rem; padding-bottom: 3rem; }
+[data-testid="stSidebar"] { background-color: #FFFFFF; }
+h1 { font-weight: 700; }
+h2 { font-weight: 650; }
+h3 { font-weight: 600; }
+div[data-testid="stMetric"] {
+    background-color: white;
+    padding: 15px;
+    border-radius: 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.stButton > button { border-radius: 10px; font-weight: 600; }
+</style>
+""", unsafe_allow_html=True)
+
+# =====================
+# SESSION STATE INITIALIZATION
+# =====================
+defaults = {
+    "users": {"demo": "password"},
+    "logged_in": False,
+    "current_user": None,
+    "goals": [],
+    "score_history": [],
+    "badges": [],
+    "demo_group": "Prefer not to say",
+    "water": 0,
+    "exercise": 0,
+    "sleep": 7.0,
+    "habit_diet": False,
+    "habit_tobacco": False,
+    "habit_activity": False,
+    "habit_sun": False,
+    "habit_screening": False,
+    "awareness_score": 0,
+    "full_name": "",
+    "profile_age": 30,
+    "health_goal": "Improve my diet"
+}
+for key, value in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 # =====================
 # LOGIN / REGISTER GATE
@@ -75,16 +106,25 @@ if not st.session_state.logged_in:
     st.stop()
 
 # =====================
-# SIDEBAR (only shows once logged in)
+# SIDEBAR
 # =====================
 with st.sidebar:
-    st.write(f"👤 Welcome, **{st.session_state.current_user}**")
-    if st.button("Logout"):
+    st.title("🩺 CancerGuard AI")
+    st.write(f"👤 **{st.session_state.current_user}**")
+    st.divider()
+    st.caption("Your health awareness companion")
+    st.divider()
+    st.write("### 📌 Quick Stats")
+    st.metric("Awareness", f"{st.session_state.awareness_score}/100")
+    st.metric("Water", f"{st.session_state.water}/8")
+    st.metric("Exercise", f"{st.session_state.exercise} min")
+    st.divider()
+    st.caption("👨‍💻 Built by [YOUR NAME]")
+    st.divider()
+    if st.button("🚪 Logout", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.current_user = None
         st.rerun()
-    st.divider()
-    st.caption("Customer Portal Active")
 
 # =====================
 # GLOBAL MEDICAL DISCLAIMER
@@ -93,7 +133,7 @@ st.warning("""
 **CancerGuard AI** uses health data and machine learning to help people understand cancer risk factors, discover prevention strategies, explore cancer research, and recognize when professional screening may be important.
 """)
 
-st.title("🩺 Cancer Awareness & Educational Guard AI")
+st.title("🩺 CancerGuard AI")
 st.subheader("Turning Cancer Data Into Prevention, Awareness & Early Action")
 st.image("https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80",
          caption="Medical Research & Education — Source: Unsplash (Free)")
@@ -102,185 +142,88 @@ st.caption("CancerGuard AI was created to make cancer-related information easier
 # =====================
 # NAVIGATION TABS
 # =====================
-tab_learn, tab_goals, tab_prevention, tab_research = st.tabs([
-    "📚 Learn & Quiz",
-    "🎯 Prevention Goals",
-    "🛡️ Protection & Prevention Awareness",
-    "🔬 Educational ML Research Demo"
+tab_home, tab_prevention, tab_lifestyle, tab_goals, tab_learn, tab_research, tab_profile = st.tabs([
+    "🏠 Dashboard",
+    "🛡️ Prevention",
+    "❤️ Healthy Living",
+    "🎯 Goals",
+    "📚 Learn",
+    "🤖 ML Research",
+    "👤 Profile"
 ])
 
 # ==========================================
-# TAB: LEARN & QUIZ
+# TAB 1: DASHBOARD
 # ==========================================
-with tab_learn:
-    st.header("📚 Learn & Test Your Knowledge")
-    st.caption("Short quiz based on public health prevention guidelines. Earn badges as you learn!")
+with tab_home:
+    st.title("🏠 Your Health Dashboard")
+    st.subheader(f"Welcome back, {st.session_state.current_user} 👋")
+    st.write("Track your healthy habits and improve your health awareness.")
+    st.divider()
 
-    quiz_questions = [
-        {
-            "q": "What percentage of cancers are estimated to be preventable through lifestyle changes?",
-            "options": ["About 10%", "About 40%", "About 90%", "None are preventable"],
-            "answer": 1
-        },
-        {
-            "q": "Which of these is a proven way to reduce cancer risk?",
-            "options": ["Tanning beds", "Regular physical activity", "Skipping screenings", "Heavy alcohol use"],
-            "answer": 1
-        },
-        {
-            "q": "The HPV vaccine primarily helps prevent which cancer?",
-            "options": ["Lung cancer", "Cervical cancer", "Skin cancer", "Bone cancer"],
-            "answer": 1
-        },
-        {
-            "q": "What is the best way to protect skin from UV-related cancer risk?",
-            "options": ["Only wear sunscreen at the beach", "Avoid all sunlight forever",
-                        "Use SPF 30+, seek shade, wear protective clothing", "Tanning in moderation is fine"],
-            "answer": 2
-        },
-        {
-            "q": "Family history of cancer means:",
-            "options": ["You will definitely develop cancer",
-                        "You may benefit from earlier or additional screening",
-                        "Nothing, it has no impact",
-                        "You should stop all screenings"],
-            "answer": 1
-        }
-    ]
+    completed_habits = sum([
+        st.session_state.habit_diet,
+        st.session_state.habit_tobacco,
+        st.session_state.habit_activity,
+        st.session_state.habit_sun,
+        st.session_state.habit_screening
+    ])
 
-    with st.form("quiz_form"):
-        user_answers = []
-        for idx, q in enumerate(quiz_questions):
-            st.write(f"**Q{idx+1}. {q['q']}**")
-            ans = st.radio("Select one:", q["options"], key=f"quiz_{idx}", index=None)
-            user_answers.append(ans)
-        quiz_submit = st.form_submit_button("Submit Quiz")
-
-    if quiz_submit:
-        score = 0
-        for idx, q in enumerate(quiz_questions):
-            correct_text = q["options"][q["answer"]]
-            if user_answers[idx] == correct_text:
-                score += 1
-
-        total_q = len(quiz_questions)
-        pct_score = score / total_q
-
-        st.subheader(f"You scored {score} / {total_q}")
-        st.progress(pct_score)
-
-        if pct_score == 1.0:
-            badge = "🥇 Gold — Cancer Prevention Expert"
-        elif pct_score >= 0.6:
-            badge = "🥈 Silver — Well Informed"
-        else:
-            badge = "🥉 Bronze — Keep Learning"
-
-        if badge not in st.session_state.badges:
-            st.session_state.badges.append(badge)
-
-        st.success(f"Badge earned: {badge}")
-
-        with st.expander("See Correct Answers & Explanations"):
-            explanations = [
-                "Around 30-50% of cancers are preventable through lifestyle and known risk factor reduction (WHO estimate).",
-                "Regular physical activity is linked to lower risk of several cancer types.",
-                "The HPV vaccine significantly reduces cervical cancer risk and some other HPV-related cancers.",
-                "Combining SPF, shade, and protective clothing offers the best evidence-based UV protection.",
-                "Family history increases risk for some cancers, so earlier/more frequent screening may be recommended."
-            ]
-            for idx, q in enumerate(quiz_questions):
-                correct_text = q["options"][q["answer"]]
-                st.write(f"**Q{idx+1}:** Correct answer: *{correct_text}*")
-                st.caption(explanations[idx])
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("🛡️ Awareness Score", f"{st.session_state.awareness_score}/100")
+    with col2:
+        st.metric("💧 Water", f"{st.session_state.water} glasses")
+    with col3:
+        st.metric("🏃 Exercise", f"{st.session_state.exercise} min")
+    with col4:
+        st.metric("😴 Sleep", f"{st.session_state.sleep} hrs")
 
     st.divider()
-    st.subheader("🏅 Your Badges")
-    if st.session_state.badges:
-        for b in st.session_state.badges:
-            st.write("•", b)
-    else:
-        st.write("No badges yet — complete the quiz above!")
+    st.subheader("🌱 Today's Health Tip")
+    st.success(
+        "Avoid tobacco, stay physically active, maintain a healthy diet, "
+        "protect your skin from excessive UV exposure, and keep up with "
+        "appropriate health screenings."
+    )
 
-# ==========================================
-# TAB: PREVENTION GOALS
-# ==========================================
-with tab_goals:
-    st.header("🎯 Your Prevention Goals & Progress")
-    st.caption("Set simple, achievable goals based on your awareness profile.")
-
-    preset_goals = [
-        "Walk or exercise 30 min, 5x this week",
-        "Add 2 extra servings of vegetables daily",
-        "Book/attend a recommended screening",
-        "Reduce alcohol by 1-2 drinks this week",
-        "Apply sunscreen daily",
-        "Research HPV or Hepatitis B vaccination",
-        "Have a 10-min conversation with my doctor about family history"
-    ]
-
-    st.subheader("Choose Goals to Track")
-    selected = st.multiselect("Select goals you want to work on:", preset_goals)
-    custom_goal = st.text_input("Or add your own custom goal:")
-    if st.button("➕ Add Goals"):
-        for g in selected:
-            if g not in [x["goal"] for x in st.session_state.goals]:
-                st.session_state.goals.append({"goal": g, "done": False})
-        if custom_goal:
-            st.session_state.goals.append({"goal": custom_goal, "done": False})
-        st.success("Goals added!")
-        st.rerun()
+    st.subheader("⚡ Quick Actions")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.info("🛡️ Check your prevention awareness")
+    with c2:
+        st.info("❤️ Track today's healthy habits")
+    with c3:
+        st.info("📚 Learn about cancer prevention")
 
     st.divider()
-    st.subheader("Your Active Goals")
+    st.subheader("📊 Your Healthy Living Progress")
+    progress_data = pd.DataFrame({
+        "Habit": ["Water", "Exercise", "Sleep", "Daily Habits"],
+        "Progress": [
+            min(st.session_state.water / 8 * 100, 100),
+            min(st.session_state.exercise / 30 * 100, 100),
+            min(st.session_state.sleep / 7 * 100, 100),
+            completed_habits / 5 * 100
+        ]
+    })
+    fig_dash = px.bar(progress_data, x="Habit", y="Progress", range_y=[0, 100],
+                       title="Today's Health Progress", color="Habit")
+    st.plotly_chart(fig_dash, use_container_width=True)
 
-    if not st.session_state.goals:
-        st.write("No goals yet. Add some above to get started!")
-    else:
-        completed = 0
-        for i, g in enumerate(st.session_state.goals):
-            checked = st.checkbox(g["goal"], value=g["done"], key=f"goal_{i}")
-            st.session_state.goals[i]["done"] = checked
-            if checked:
-                completed += 1
-
-        total = len(st.session_state.goals)
-        pct = completed / total if total > 0 else 0
-        st.progress(pct)
-        st.write(f"**{completed} / {total} goals completed** ({pct:.0%})")
-
-        if pct == 1 and total > 0:
-            st.balloons()
-            st.success("🏆 All goals completed! Great work on your prevention journey.")
-
-        if st.button("🗑️ Clear All Goals"):
-            st.session_state.goals = []
-            st.rerun()
-
-    st.divider()
-    st.subheader("📈 Your Awareness Score Trend")
-    if len(st.session_state.score_history) == 0:
-        st.write("No score history yet. Complete the Awareness Calculator in the Protection tab to start tracking.")
-    else:
-        trend_df = pd.DataFrame({
-            "Attempt": list(range(1, len(st.session_state.score_history) + 1)),
-            "Score": st.session_state.score_history
-        })
-        fig_trend = px.line(trend_df, x="Attempt", y="Score", markers=True,
-                             title="Your Awareness Score Over Time")
-        fig_trend.update_yaxes(range=[0, 100])
-        st.plotly_chart(fig_trend, use_container_width=True)
+    st.caption("Note: Awareness Score updates after you complete the calculator in the Prevention tab.")
 
 # ==========================================
-# TAB: PROTECTION & PREVENTION
+# TAB 2: PREVENTION
 # ==========================================
 with tab_prevention:
-    st.header("Know Your Risk Factors")
+    st.header("🛡️ Prevention Awareness")
     st.divider()
     st.subheader("👤 Personalize Your Content")
     demo_choice = st.selectbox(
         "I'm filling this out primarily as:",
-        ["Prefer not to say", "Woman", "Man", "Youth / Young Adult (under 25)", "Older Adult (65+)"]
+        ["Prefer not to say", "Woman", "Man", "Youth / Young Adult (under 25)", "Older Adult (65+)"],
+        key="demo_select"
     )
     st.session_state.demo_group = demo_choice
 
@@ -320,61 +263,40 @@ with tab_prevention:
     st.write("This educational calculator uses general lifestyle inputs. **It does not diagnose anything.**")
 
     col1, col2 = st.columns(2)
-
     with col1:
-        age = st.slider("Age", 18, 100, 40)
-        smoking = st.selectbox("Smoking Status", [
-            "Never smoked", "Former smoker", "Current smoker"
-        ])
-        family_hist = st.selectbox("Family History", [
-            "No", "Yes — 1st degree relative", "Yes — 2nd degree"
-        ])
-        screening = st.selectbox("Regular Screenings", [
-            "Up to date", "Sometimes", "Not up to date / Unsure"
-        ])
+        age = st.slider("Age", 18, 100, 40, key="basic_age")
+        smoking = st.selectbox("Smoking Status", ["Never smoked", "Former smoker", "Current smoker"], key="basic_smoke")
+        family_hist = st.selectbox("Family History", ["No", "Yes — 1st degree relative", "Yes — 2nd degree"], key="basic_family")
+        screening = st.selectbox("Regular Screenings", ["Up to date", "Sometimes", "Not up to date / Unsure"], key="basic_screen")
 
     with col2:
-        alcohol = st.selectbox("Alcohol Use", [
-            "None / Rare", "Light", "Moderate", "Heavy"
-        ])
-        sun = st.selectbox("Regular Unprotected Sun Exposure", [
-            "Rarely", "Sometimes", "Often"
-        ])
-        diet = st.selectbox("Diet Quality (self-rated)", [
-            "Mostly whole foods / plants", "Average / Mixed", "High processed foods"
-        ])
-        exercise = st.selectbox("Weekly Exercise", [
-            "Active (150+ min)", "Moderate (some)", "Mostly sedentary"
-        ])
+        alcohol = st.selectbox("Alcohol Use", ["None / Rare", "Light", "Moderate", "Heavy"], key="basic_alc")
+        sun = st.selectbox("Regular Unprotected Sun Exposure", ["Rarely", "Sometimes", "Often"], key="basic_sun")
+        diet = st.selectbox("Diet Quality (self-rated)", ["Mostly whole foods / plants", "Average / Mixed", "High processed foods"], key="basic_diet")
+        exercise_input = st.selectbox("Weekly Exercise", ["Active (150+ min)", "Moderate (some)", "Mostly sedentary"], key="basic_exercise")
 
     score = 0
     if age > 60: score += 20
     elif age > 45: score += 12
-
     if smoking == "Current smoker": score += 22
     elif smoking == "Former smoker": score += 8
-
     if family_hist.startswith("Yes — 1st"): score += 18
     elif family_hist.startswith("Yes — 2nd"): score += 8
-
     if alcohol == "Heavy": score += 14
     elif alcohol == "Moderate": score += 6
-
     if sun == "Often": score += 12
     elif sun == "Sometimes": score += 5
-
     if screening == "Not up to date / Unsure": score += 10
-
     if diet == "High processed foods": score += 10
     elif diet == "Average / Mixed": score += 5
-
-    if exercise == "Mostly sedentary": score += 10
-    elif exercise == "Moderate (some)": score += 4
+    if exercise_input == "Mostly sedentary": score += 10
+    elif exercise_input == "Moderate (some)": score += 4
 
     awareness_score = min(score, 100)
+    st.session_state.awareness_score = awareness_score
 
     st.divider()
-    st.subheader(f"Awareness Score: {awareness_score} / 100")
+    st.subheader(f"🛡️ Prevention Awareness Score: {awareness_score} / 100")
     st.progress(awareness_score / 100.0)
 
     if awareness_score >= 55:
@@ -397,7 +319,6 @@ with tab_prevention:
     ]
     for t in tips:
         st.write("•", t)
-
     st.caption("References for display: WHO, CDC, NCI. Used for education only.")
 
     st.divider()
@@ -408,17 +329,17 @@ with tab_prevention:
         st.write("**Lifestyle & Health Factors**")
         c1, c2, c3 = st.columns(3)
         with c1:
-            a_age = st.slider("Age", 18, 90, 35)
-            a_smoke = st.selectbox("Smoking", ["Never", "Former (quit >10yr)", "Former (<10yr)", "Current"])
-            a_family = st.selectbox("Family History", ["None", "2nd degree", "1st degree"])
+            a_age = st.slider("Age", 18, 90, 35, key="adv_age")
+            a_smoke = st.selectbox("Smoking", ["Never", "Former (quit >10yr)", "Former (<10yr)", "Current"], key="adv_smoke")
+            a_family = st.selectbox("Family History", ["None", "2nd degree", "1st degree"], key="adv_family")
         with c2:
-            a_alc = st.selectbox("Alcohol / Week", ["None", "1-7", "8-14", "15+"])
-            a_weight = st.selectbox("Weight (self-est)", ["Normal", "Overweight", "Obese"])
-            a_veg = st.selectbox("Veg/Fruit Daily", ["5+", "2-4", "<2"])
+            a_alc = st.selectbox("Alcohol / Week", ["None", "1-7", "8-14", "15+"], key="adv_alc")
+            a_weight = st.selectbox("Weight (self-est)", ["Normal", "Overweight", "Obese"], key="adv_weight")
+            a_veg = st.selectbox("Veg/Fruit Daily", ["5+", "2-4", "<2"], key="adv_veg")
         with c3:
-            a_meat = st.selectbox("Processed Meat", ["Rare/None", "1-2x/wk", "3-5x/wk", "Most days"])
-            a_sun = st.selectbox("Sun Protection", ["Always", "Sometimes", "Rarely / Burn"])
-            a_screen = st.selectbox("Screenings", ["Up to date", "Partial", "Not up to date"])
+            a_meat = st.selectbox("Processed Meat", ["Rare/None", "1-2x/wk", "3-5x/wk", "Most days"], key="adv_meat")
+            a_sun = st.selectbox("Sun Protection", ["Always", "Sometimes", "Rarely / Burn"], key="adv_sun")
+            a_screen = st.selectbox("Screenings", ["Up to date", "Partial", "Not up to date"], key="adv_screen")
 
         btn = st.form_submit_button("Generate Awareness Profile")
 
@@ -477,20 +398,253 @@ with tab_prevention:
         st.warning("⚠️ **Not clinical.** This is an educational portfolio tool. Always see a healthcare provider for real risk assessment and screening.")
 
 # ==========================================
-# TAB: EDUCATIONAL ML DEMO
+# TAB 3: HEALTHY LIVING
+# ==========================================
+with tab_lifestyle:
+    st.title("❤️ Healthy Living")
+    st.write("Track simple daily habits that support a healthier lifestyle.")
+    st.divider()
+
+    st.subheader("💧 Water Intake")
+    water = st.slider("How many glasses of water have you taken today?", 0, 15, key="water")
+    st.progress(min(water / 15, 1.0))
+    if water >= 8:
+        st.success("Great! You've reached your daily water goal.")
+    else:
+        st.info(f"You need about {8 - water} more glasses to reach 8.")
+
+    st.divider()
+    st.subheader("🏃 Exercise")
+    exercise = st.slider("Minutes of exercise today", 0, 180, key="exercise")
+    if exercise >= 30:
+        st.success("Excellent! You've completed 30+ minutes of activity.")
+    else:
+        st.info(f"{30 - exercise} more minutes to reach today's goal.")
+
+    st.divider()
+    st.subheader("😴 Sleep")
+    sleep = st.slider("Hours of sleep last night", 0.0, 12.0, step=0.5, key="sleep")
+    if sleep >= 7:
+        st.success("Good sleep duration!")
+    else:
+        st.warning("Try to improve your sleep routine.")
+
+    st.divider()
+    st.subheader("✅ Today's Healthy Habits")
+    st.checkbox("🥗 Ate fruits and vegetables", key="habit_diet")
+    st.checkbox("🚭 Avoided tobacco", key="habit_tobacco")
+    st.checkbox("🏃 Completed physical activity", key="habit_activity")
+    st.checkbox("☀️ Protected myself from excessive sun exposure", key="habit_sun")
+    st.checkbox("🩺 Stayed up to date with health checks", key="habit_screening")
+
+    completed = sum([
+        st.session_state.habit_diet,
+        st.session_state.habit_tobacco,
+        st.session_state.habit_activity,
+        st.session_state.habit_sun,
+        st.session_state.habit_screening
+    ])
+    st.write(f"### Daily Habit Score: {completed}/5")
+    st.progress(completed / 5)
+    if completed == 5:
+        st.success("🎉 Excellent! You completed all your habits today.")
+
+# ==========================================
+# TAB 4: GOALS & PROGRESS
+# ==========================================
+with tab_goals:
+    st.header("🎯 Your Prevention Goals & Progress")
+    st.caption("Set simple, achievable goals based on your awareness profile.")
+
+    preset_goals = [
+        "Walk or exercise 30 min, 5x this week",
+        "Add 2 extra servings of vegetables daily",
+        "Book/attend a recommended screening",
+        "Reduce alcohol by 1-2 drinks this week",
+        "Apply sunscreen daily",
+        "Research HPV or Hepatitis B vaccination",
+        "Have a 10-min conversation with my doctor about family history"
+    ]
+
+    st.subheader("Choose Goals to Track")
+    selected = st.multiselect("Select goals you want to work on:", preset_goals, key="goal_select")
+    custom_goal = st.text_input("Or add your own custom goal:", key="custom_goal_input")
+    if st.button("➕ Add Goals"):
+        for g in selected:
+            if g not in [x["goal"] for x in st.session_state.goals]:
+                st.session_state.goals.append({"goal": g, "done": False})
+        if custom_goal:
+            st.session_state.goals.append({"goal": custom_goal, "done": False})
+        st.success("Goals added!")
+        st.rerun()
+
+    st.divider()
+    st.subheader("Your Active Goals")
+    if not st.session_state.goals:
+        st.write("No goals yet. Add some above to get started!")
+    else:
+        completed_goals = 0
+        for i, g in enumerate(st.session_state.goals):
+            checked = st.checkbox(g["goal"], value=g["done"], key=f"goal_{i}")
+            st.session_state.goals[i]["done"] = checked
+            if checked:
+                completed_goals += 1
+
+        total = len(st.session_state.goals)
+        pct = completed_goals / total if total > 0 else 0
+        st.progress(pct)
+        st.write(f"**{completed_goals} / {total} goals completed** ({pct:.0%})")
+
+        if pct == 1 and total > 0:
+            st.balloons()
+            st.success("🏆 All goals completed! Great work on your prevention journey.")
+
+        if st.button("🗑️ Clear All Goals"):
+            st.session_state.goals = []
+            st.rerun()
+
+    st.divider()
+    st.subheader("📈 Your Awareness Score Trend")
+    if len(st.session_state.score_history) == 0:
+        st.write("No score history yet. Complete the Advanced Calculator in the Prevention tab to start tracking.")
+    else:
+        trend_df = pd.DataFrame({
+            "Attempt": list(range(1, len(st.session_state.score_history) + 1)),
+            "Score": st.session_state.score_history
+        })
+        fig_trend = px.line(trend_df, x="Attempt", y="Score", markers=True,
+                             title="Your Awareness Score Over Time")
+        fig_trend.update_yaxes(range=[0, 100])
+        st.plotly_chart(fig_trend, use_container_width=True)
+
+# ==========================================
+# TAB 5: LEARN & QUIZ
+# ==========================================
+with tab_learn:
+    st.title("📚 Cancer Awareness & Education")
+    st.write("Explore simple educational information about cancer prevention and healthy living.")
+    st.divider()
+
+    topics = {
+        "🎗️ Cancer Awareness": "Cancer refers to a group of diseases involving abnormal cell growth. Learning about prevention, risk factors and appropriate screening can help people make informed health decisions.",
+        "🚭 Tobacco": "Avoiding tobacco is an important way to reduce the risk of several cancers and other serious health problems.",
+        "🥗 Healthy Diet": "A balanced diet that includes vegetables, fruits, whole grains and appropriate protein sources supports overall health.",
+        "🏃 Physical Activity": "Regular physical activity supports overall wellbeing and can help maintain a healthy body weight.",
+        "☀️ Sun Protection": "Excessive ultraviolet exposure can damage the skin. Protective clothing, shade and appropriate sunscreen can help reduce UV exposure.",
+        "💉 Vaccination": "Some infections are associated with cancer. Vaccines such as HPV and hepatitis B vaccines can help prevent certain infections where medically appropriate.",
+        "🩺 Screening": "Cancer screening recommendations depend on factors such as age, sex, family history and personal health history. Speak with a qualified healthcare professional about appropriate screening."
+    }
+
+    for title, content in topics.items():
+        with st.expander(title):
+            st.write(content)
+
+    st.divider()
+    st.subheader("📝 Test Your Knowledge")
+    st.caption("Short quiz based on public health prevention guidelines. Earn badges as you learn!")
+
+    quiz_questions = [
+        {
+            "q": "What percentage of cancers are estimated to be preventable through lifestyle changes?",
+            "options": ["About 10%", "About 40%", "About 90%", "None are preventable"],
+            "answer": 1
+        },
+        {
+            "q": "Which of these is a proven way to reduce cancer risk?",
+            "options": ["Tanning beds", "Regular physical activity", "Skipping screenings", "Heavy alcohol use"],
+            "answer": 1
+        },
+        {
+            "q": "The HPV vaccine primarily helps prevent which cancer?",
+            "options": ["Lung cancer", "Cervical cancer", "Skin cancer", "Bone cancer"],
+            "answer": 1
+        },
+        {
+            "q": "What is the best way to protect skin from UV-related cancer risk?",
+            "options": ["Only wear sunscreen at the beach", "Avoid all sunlight forever",
+                        "Use SPF 30+, seek shade, wear protective clothing", "Tanning in moderation is fine"],
+            "answer": 2
+        },
+        {
+            "q": "Family history of cancer means:",
+            "options": ["You will definitely develop cancer",
+                        "You may benefit from earlier or additional screening",
+                        "Nothing, it has no impact",
+                        "You should stop all screenings"],
+            "answer": 1
+        }
+    ]
+
+    with st.form("quiz_form"):
+        user_answers = []
+        for idx, q in enumerate(quiz_questions):
+            st.write(f"**Q{idx+1}. {q['q']}**")
+            ans = st.radio("Select one:", q["options"], key=f"quiz_{idx}", index=None)
+            user_answers.append(ans)
+        quiz_submit = st.form_submit_button("Submit Quiz")
+
+    if quiz_submit:
+        quiz_score = 0
+        for idx, q in enumerate(quiz_questions):
+            correct_text = q["options"][q["answer"]]
+            if user_answers[idx] == correct_text:
+                quiz_score += 1
+
+        total_q = len(quiz_questions)
+        pct_score = quiz_score / total_q
+
+        st.subheader(f"You scored {quiz_score} / {total_q}")
+        st.progress(pct_score)
+
+        if pct_score == 1.0:
+            badge = "🥇 Gold — Cancer Prevention Expert"
+        elif pct_score >= 0.6:
+            badge = "🥈 Silver — Well Informed"
+        else:
+            badge = "🥉 Bronze — Keep Learning"
+
+        if badge not in st.session_state.badges:
+            st.session_state.badges.append(badge)
+
+        st.success(f"Badge earned: {badge}")
+
+        with st.expander("See Correct Answers & Explanations"):
+            explanations = [
+                "Around 30-50% of cancers are preventable through lifestyle and known risk factor reduction (WHO estimate).",
+                "Regular physical activity is linked to lower risk of several cancer types.",
+                "The HPV vaccine significantly reduces cervical cancer risk and some other HPV-related cancers.",
+                "Combining SPF, shade, and protective clothing offers the best evidence-based UV protection.",
+                "Family history increases risk for some cancers, so earlier/more frequent screening may be recommended."
+            ]
+            for idx, q in enumerate(quiz_questions):
+                correct_text = q["options"][q["answer"]]
+                st.write(f"**Q{idx+1}:** Correct answer: *{correct_text}*")
+                st.caption(explanations[idx])
+
+    st.divider()
+    st.subheader("🏅 Your Badges")
+    if st.session_state.badges:
+        for b in st.session_state.badges:
+            st.write("•", b)
+    else:
+        st.write("No badges yet — complete the quiz above!")
+
+# ==========================================
+# TAB 6: ML RESEARCH
 # ==========================================
 with tab_research:
-    st.header("Breast Cancer Dataset Explorer")
+    st.header("🤖 Educational ML Research Lab")
     st.info("""
-    This loads the public **Wisconsin Breast Cancer Dataset** (built into `scikit-learn`). 
-    The model predicts based on anonymized cell measurements. **This is NOT a real diagnostic tool.**
+    This section demonstrates how machine learning can be applied to an anonymized breast cancer dataset.
+
+    ⚠️ This is an educational and portfolio demonstration. It is **NOT** a medical diagnostic system.
     """)
 
     @st.cache_data
     def get_data():
         data = load_breast_cancer()
         df = pd.DataFrame(data.data, columns=data.feature_names)
-        df["diagnosis"] = data.target  # 0 = Malignant, 1 = Benign
+        df["diagnosis"] = data.target
         return df, data
 
     df, cancer_data = get_data()
@@ -501,9 +655,7 @@ with tab_research:
 
     X = df.drop("diagnosis", axis=1)
     y = df["diagnosis"]
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
     model = RandomForestClassifier(n_estimators=150, random_state=42)
     model.fit(X_train, y_train)
@@ -524,15 +676,9 @@ with tab_research:
         "Importance": model.feature_importances_
     }).sort_values("Importance", ascending=False).head(8)
 
-    fig = px.bar(
-        importance_df,
-        x="Importance",
-        y="Feature",
-        orientation="h",
-        color="Importance",
-        color_continuous_scale="Tealgrn",
-        title="What measurements influence this learning model?"
-    )
+    fig = px.bar(importance_df, x="Importance", y="Feature", orientation="h",
+                 color="Importance", color_continuous_scale="Tealgrn",
+                 title="What measurements influence this learning model?")
     fig.update_layout(yaxis_categoryorder="total ascending")
     st.plotly_chart(fig, use_container_width=True)
 
@@ -544,13 +690,8 @@ with tab_research:
     max_val = float(X[feature_choice].max())
     mean_val = float(X[feature_choice].mean())
 
-    user_value = st.slider(
-        feature_choice.replace(" ", " ").title(),
-        min_value=min_val,
-        max_value=max_val,
-        value=mean_val,
-        step=0.1
-    )
+    user_value = st.slider(feature_choice.title(), min_value=min_val, max_value=max_val,
+                            value=mean_val, step=0.1, key="ml_slider")
 
     sample_row = X.iloc[[0]].copy()
     sample_row[feature_choice] = user_value
@@ -560,20 +701,41 @@ with tab_research:
 
     st.write("**Model Output for This Hypothetical Input:**")
     if prediction[0] == 1:
-        st.success(
-            f"Predicted Class: **Benign** | "
-            f"Confidence: Benign {probabilities[1]:.1%} | Malignant {probabilities[0]:.1%}"
-        )
+        st.success(f"Predicted Class: **Benign** | Confidence: Benign {probabilities[1]:.1%} | Malignant {probabilities[0]:.1%}")
     else:
-        st.error(
-            f"Predicted Class: **Malignant** | "
-            f"Confidence: Malignant {probabilities[0]:.1%} | Benign {probabilities[1]:.1%}"
-        )
+        st.error(f"Predicted Class: **Malignant** | Confidence: Malignant {probabilities[0]:.1%} | Benign {probabilities[1]:.1%}")
 
     st.caption("Reminder: Real diagnosis requires biopsy, imaging, and expert pathologist review. This demo is for code/portfolio demonstration only.")
+
+# ==========================================
+# TAB 7: PROFILE
+# ==========================================
+with tab_profile:
+    st.title("👤 My Profile")
+    st.success(f"Logged in as: **{st.session_state.current_user}**")
+    st.divider()
+
+    st.subheader("Personal Information")
+    name = st.text_input("Full Name", key="full_name")
+    age_profile = st.number_input("Age", min_value=18, max_value=100, key="profile_age")
+    goal = st.selectbox(
+        "Main Health Goal",
+        ["Improve my diet", "Exercise more", "Improve my sleep",
+         "Drink more water", "Learn about cancer prevention", "Stay up to date with screening"],
+        key="health_goal"
+    )
+
+    if st.button("💾 Save Profile"):
+        st.success("Profile updated successfully!")
 
 # =====================
 # FOOTER
 # =====================
 st.divider()
-st.caption("Portfolio Project • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
+st.caption(" Educational Awareness • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
+st.markdown(
+    "<div style='text-align: center; padding: 10px; color: gray; font-size: 14px;'>"
+    "Built by <strong>[Toluwalope]</strong> | CancerGuard AI © 2026"
+    "</div>",
+    unsafe_allow_html=True
+)
