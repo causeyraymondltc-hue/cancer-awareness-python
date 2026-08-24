@@ -255,7 +255,8 @@ with tab_goals:
 # TAB 1: PROTECTION & PREVENTION
 # ==========================================
 with tab_prevention:
-       st.header("Know Your Risk Factors") st.divider()
+       st.header("Know Your Risk Factors") 
+       st.divider()
 st.subheader("👤 Personalize Your Content")
 demo_choice = st.selectbox(
         "I'm filling this out primarily as:",
