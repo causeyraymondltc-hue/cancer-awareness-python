@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import random
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -28,7 +29,7 @@ h1 { font-weight: 700; }
 h2 { font-weight: 650; }
 h3 { font-weight: 600; }
 div[data-testid="stMetric"] {
-    background-color: light gray;
+    background-color: #F5F5F5;
     padding: 15px;
     border-radius: 15px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
@@ -59,7 +60,10 @@ defaults = {
     "awareness_score": 0,
     "full_name": "",
     "profile_age": 30,
-    "health_goal": "Improve my diet"
+    "health_goal": "Improve my diet",
+    "daily_quote": None,
+    "challenge_week": 1,
+    "challenge_done": False
 }
 for key, value in defaults.items():
     if key not in st.session_state:
@@ -102,7 +106,7 @@ if not st.session_state.logged_in:
                     st.session_state.users[new_user] = new_pass
                     st.success(f"Account '{new_user}' created! Now log in.")
 
-    st.info("💡 **Demo credentials:** username `demo` | password `password`")
+    st.info(" **Demo credentials:** username `demo` | password `password`")
     st.stop()
 
 # =====================
@@ -142,11 +146,12 @@ st.caption("CancerGuard AI was created to make cancer-related information easier
 # =====================
 # NAVIGATION TABS
 # =====================
-tab_home, tab_prevention, tab_lifestyle, tab_goals, tab_learn, tab_research, tab_profile = st.tabs([
+tab_home, tab_prevention, tab_lifestyle, tab_goals, tab_challenge, tab_learn, tab_research, tab_profile = st.tabs([
     " Dashboard",
     " Prevention",
     " Healthy Living",
     " Goals",
+    " Weekly Challenge",
     " Learn",
     " ML Research",
     " Profile"
@@ -170,14 +175,22 @@ with tab_home:
     ])
 
     col1, col2, col3, col4 = st.columns(4)
+
     with col1:
-        st.metric(" Awareness Score", f"{st.session_state.awareness_score}/100")
+        score_color = "🟢" if st.session_state.awareness_score < 30 else "🟡" if st.session_state.awareness_score < 55 else "🔴"
+        st.metric(f"{score_color} Awareness", f"{st.session_state.awareness_score}/100")
+
     with col2:
-        st.metric(" Water", f"{st.session_state.water} glasses")
+        water_emoji = "💧" if st.session_state.water < 8 else "✅"
+        st.metric(f"{water_emoji} Water", f"{st.session_state.water} glasses")
+
     with col3:
-        st.metric(" Exercise", f"{st.session_state.exercise} min")
+        exercise_emoji = "🏃" if st.session_state.exercise < 30 else "🔥"
+        st.metric(f"{exercise_emoji} Exercise", f"{st.session_state.exercise} min")
+
     with col4:
-        st.metric(" Sleep", f"{st.session_state.sleep} hrs")
+        sleep_emoji = "😴" if st.session_state.sleep < 7 else "✨"
+        st.metric(f"{sleep_emoji} Sleep", f"{st.session_state.sleep} hrs")
 
     st.divider()
     st.subheader(" Today's Health Tip")
@@ -186,6 +199,28 @@ with tab_home:
         "protect your skin from excessive UV exposure, and keep up with "
         "appropriate health screenings."
     )
+
+    st.divider()
+    st.subheader("💬 Daily Motivation")
+
+    quotes = [
+        "Small steps every day lead to big changes. ",
+        "Your health is an investment, not an expense. ",
+        "Prevention today is protection tomorrow. 🛡️",
+        "Knowledge about your body is power. ",
+        "Every healthy choice matters, no matter how small. ",
+        "You can't pour from an empty cup — take care of yourself. ☕",
+        "Progress, not perfection. "
+    ]
+
+    if st.session_state.daily_quote is None:
+        st.session_state.daily_quote = random.choice(quotes)
+
+    st.info(f"*{st.session_state.daily_quote}*")
+
+    if st.button(" New Quote"):
+        st.session_state.daily_quote = random.choice(quotes)
+        st.rerun()
 
     st.subheader(" Quick Actions")
     c1, c2, c3 = st.columns(3)
@@ -229,7 +264,7 @@ with tab_prevention:
 
     demo_tips = {
         "Woman": [
-            " Discuss mammogram scheduling with your doctor based on age and family history.",
+            "🎗️ Discuss mammogram scheduling with your doctor based on age and family history.",
             " HPV vaccination and regular cervical screening significantly reduce cervical cancer risk.",
             " Breast self-awareness: know what's normal for you and report changes promptly.",
             " Alcohol has a strong link to breast cancer risk — even small reductions help."
@@ -296,15 +331,16 @@ with tab_prevention:
     st.session_state.awareness_score = awareness_score
 
     st.divider()
-    st.subheader(f"🛡️ Prevention Awareness Score: {awareness_score} / 100")
+    st.subheader(f" Prevention Awareness Score: {awareness_score} / 100")
     st.progress(awareness_score / 100.0)
 
     if awareness_score >= 55:
-        st.error("🔴 Higher awareness profile based on inputs. Please discuss risk reduction and screening schedules with a healthcare provider.")
+        st.error(" Higher awareness profile based on inputs. Please discuss risk reduction and screening schedules with a healthcare provider.")
     elif awareness_score >= 30:
-        st.warning("🟡 Moderate awareness. Review habits with a doctor or qualified health professional.")
+        st.warning(" Moderate awareness. Review habits with a doctor or qualified health professional.")
     else:
-        st.success("🟢 Lower awareness profile based on inputs. Maintain healthy practices and stay up to date with screenings.")
+        st.success(" Lower awareness profile based on inputs. Maintain healthy practices and stay up to date with screenings.")
+        st.snow()
 
     st.divider()
     st.subheader("Evidence-Based Protection Tips")
@@ -387,8 +423,8 @@ with tab_prevention:
         if "Rarely" in a_sun or "Sometimes" in a_sun: adv_tips.append(("☀️ Sun", "SPF 30+, shade, protective clothing."))
         if "Not up to date" in a_screen: adv_tips.append(("🩺 Screening", "Consult your GP for age-appropriate tests."))
         if "1st degree" in a_family or "2nd degree" in a_family: adv_tips.append(("👨‍👩‍👧 Family", "Discuss earlier/additional screening with doctor."))
-        adv_tips.append(("💉 Vaccines", "HPV / Hep B vaccines where appropriate."))
-        adv_tips.append(("📚 Source", "Cancer Council Australia, WHO, NCI — for education only."))
+        adv_tips.append((" Vaccines", "HPV / Hep B vaccines where appropriate."))
+        adv_tips.append((" Source", "Cancer Council Australia, WHO, NCI — for education only."))
 
         for title, body in adv_tips:
             with st.container(border=True):
@@ -402,14 +438,17 @@ with tab_prevention:
 # ==========================================
 with tab_lifestyle:
     st.title(" Healthy Living")
+    st.image("https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=800&q=80",
+              caption="Small daily habits create lasting change")
     st.write("Track simple daily habits that support a healthier lifestyle.")
     st.divider()
 
-    st.subheader(" Water Intake")
+    st.subheader("💧 Water Intake")
     water = st.slider("How many glasses of water have you taken today?", 0, 15, key="water")
     st.progress(min(water / 15, 1.0))
     if water >= 8:
         st.success("Great! You've reached your daily water goal.")
+        st.toast(" Water goal reached!", icon="🎉")
     else:
         st.info(f"You need about {8 - water} more glasses to reach 8.")
 
@@ -448,6 +487,7 @@ with tab_lifestyle:
     st.progress(completed / 5)
     if completed == 5:
         st.success(" Excellent! You completed all your habits today.")
+        st.balloons()
 
 # ==========================================
 # TAB 4: GOALS & PROGRESS
@@ -469,7 +509,7 @@ with tab_goals:
     st.subheader("Choose Goals to Track")
     selected = st.multiselect("Select goals you want to work on:", preset_goals, key="goal_select")
     custom_goal = st.text_input("Or add your own custom goal:", key="custom_goal_input")
-    if st.button("➕ Add Goals"):
+    if st.button(" Add Goals"):
         for g in selected:
             if g not in [x["goal"] for x in st.session_state.goals]:
                 st.session_state.goals.append({"goal": g, "done": False})
@@ -497,7 +537,7 @@ with tab_goals:
 
         if pct == 1 and total > 0:
             st.balloons()
-            st.success(" All goals completed! Great work on your prevention journey.")
+            st.success("🏆 All goals completed! Great work on your prevention journey.")
 
         if st.button(" Clear All Goals"):
             st.session_state.goals = []
@@ -518,10 +558,51 @@ with tab_goals:
         st.plotly_chart(fig_trend, use_container_width=True)
 
 # ==========================================
-# TAB 5: LEARN & QUIZ
+# TAB 5: WEEKLY CHALLENGE
+# ==========================================
+with tab_challenge:
+    st.title(" Weekly Prevention Challenge")
+    st.image("https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&q=80",
+              caption="Small challenges, big impact")
+
+    st.info("Complete this week's challenge to build lasting prevention habits!")
+
+    challenges = {
+        1: (" Veggie Week", "Add one extra serving of vegetables to every meal this week."),
+        2: (" Move More", "Take a 10-minute walk every day this week."),
+        3: (" Sun Smart", "Apply sunscreen every day this week, even indoors near windows."),
+        4: (" Hydration Hero", "Drink at least 8 glasses of water daily this week."),
+        5: (" Screening Check", "Research what screenings are recommended for your age group."),
+    }
+
+    current_week = ((st.session_state.challenge_week - 1) % len(challenges)) + 1
+    title, description = challenges[current_week]
+
+    st.subheader(f"Week {current_week}: {title}")
+    st.write(description)
+
+    if not st.session_state.challenge_done:
+        if st.button("✅ Mark Challenge Complete"):
+            st.session_state.challenge_done = True
+            st.balloons()
+            st.success("🎉 Amazing! Challenge completed!")
+    else:
+        st.success("✅ This week's challenge is complete!")
+        if st.button("➡️ Start Next Week's Challenge"):
+            st.session_state.challenge_week += 1
+            st.session_state.challenge_done = False
+            st.rerun()
+
+    st.divider()
+    st.caption(f"Challenges completed: {st.session_state.challenge_week - 1}")
+
+# ==========================================
+# TAB 6: LEARN & QUIZ
 # ==========================================
 with tab_learn:
     st.title(" Cancer Awareness & Education")
+    st.image("https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=800&q=80",
+              caption="Knowledge is prevention")
     st.write("Explore simple educational information about cancer prevention and healthy living.")
     st.divider()
 
@@ -538,6 +619,27 @@ with tab_learn:
     for title, content in topics.items():
         with st.expander(title):
             st.write(content)
+
+    st.divider()
+    st.subheader(" General Body Awareness Guide")
+    st.caption("Educational overview only — always consult a doctor for any concerns.")
+
+    body_area = st.selectbox(
+        "Select an area to learn general awareness info:",
+        ["Select an area...", "Skin", "Breast/Chest", "Digestive System", "Respiratory System", "General/Whole Body"]
+    )
+
+    body_info = {
+        "Skin": " **What to watch for:** New moles, changes in existing moles (size, color, border), sores that don't heal. **Action:** See a dermatologist for any changes.",
+        "Breast/Chest": " **What to watch for:** Lumps, changes in size/shape, skin dimpling, unusual discharge. **Action:** Regular self-awareness + age-appropriate screening.",
+        "Digestive System": " **What to watch for:** Persistent changes in bowel habits, unexplained weight loss, blood in stool. **Action:** Discuss with your doctor, especially if symptoms persist >2 weeks.",
+        "Respiratory System": " **What to watch for:** Persistent cough, shortness of breath, chest pain. **Action:** See a doctor, especially if you have a smoking history.",
+        "General/Whole Body": " **What to watch for:** Unexplained fatigue, unexplained weight loss, persistent pain, fever. **Action:** Any persistent unusual symptom warrants a doctor visit."
+    }
+
+    if body_area != "Select an area...":
+        st.warning(body_info[body_area])
+        st.caption(" This is general educational information, not a diagnostic tool. Many symptoms have simple, non-cancer explanations.")
 
     st.divider()
     st.subheader(" Test Your Knowledge")
@@ -597,11 +699,11 @@ with tab_learn:
         st.progress(pct_score)
 
         if pct_score == 1.0:
-            badge = "🥇 Gold — Cancer Prevention Expert"
+            badge = " Gold — Cancer Prevention Expert"
         elif pct_score >= 0.6:
-            badge = "🥈 Silver — Well Informed"
+            badge = " Silver — Well Informed"
         else:
-            badge = "🥉 Bronze — Keep Learning"
+            badge = " Bronze — Keep Learning"
 
         if badge not in st.session_state.badges:
             st.session_state.badges.append(badge)
@@ -622,7 +724,7 @@ with tab_learn:
                 st.caption(explanations[idx])
 
     st.divider()
-    st.subheader("🏅 Your Badges")
+    st.subheader(" Your Badges")
     if st.session_state.badges:
         for b in st.session_state.badges:
             st.write("•", b)
@@ -630,10 +732,12 @@ with tab_learn:
         st.write("No badges yet — complete the quiz above!")
 
 # ==========================================
-# TAB 6: ML RESEARCH
+# TAB 7: ML RESEARCH
 # ==========================================
 with tab_research:
     st.header(" Educational ML Research Lab")
+    st.image("https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=800&q=80",
+              caption="Data-driven research and education")
     st.info("""
     This section demonstrates how machine learning can be applied to an anonymized breast cancer dataset.
 
@@ -708,10 +812,10 @@ with tab_research:
     st.caption("Reminder: Real diagnosis requires biopsy, imaging, and expert pathologist review. This demo is for code/portfolio demonstration only.")
 
 # ==========================================
-# TAB 7: PROFILE
+# TAB 8: PROFILE
 # ==========================================
 with tab_profile:
-    st.title("👤 My Profile")
+    st.title(" My Profile")
     st.success(f"Logged in as: **{st.session_state.current_user}**")
     st.divider()
 
@@ -732,7 +836,7 @@ with tab_profile:
 # FOOTER
 # =====================
 st.divider()
-st.caption(" Educational Awareness • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
+st.caption("Educational Awareness • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
 st.markdown(
     "<div style='text-align: center; padding: 10px; color: gray; font-size: 14px;'>"
     "Built by <strong>[Toluwalope]</strong> | CancerGuard AI © 2026"
