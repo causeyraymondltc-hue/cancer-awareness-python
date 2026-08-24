@@ -89,7 +89,9 @@ st.warning("""
 """)
 
 st.title("🩺 Cancer Awareness & Educational Guard AI")
-st.subheader(" Turning Cancer Data Into Prevention, Awareness & Early Action")
+st.subheader(" Turning Cancer Data Into Prevention, Awareness & Early Action") 
+st.image("https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80", 
+         caption="Medical Research & Education — Source: Unsplash (Free)")
 st.caption("CancerGuard AI was created to make cancer-related information easier to understand and explore.")
 
 # =====================
