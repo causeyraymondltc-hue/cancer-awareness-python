@@ -22,14 +22,14 @@ st.set_page_config(
 # =====================
 st.markdown("""
 <style>
-.main { background-color: #6A1B9A; }
+.main { background-color: #E91E63; }
 .block-container { padding-top: 2rem; padding-bottom: 3rem; }
-[data-testid="stSidebar"] { background-color: #F5F5F5; }
+[data-testid="stSidebar"] { background-color: #E91E63; }
 h1 { font-weight: 700; }
 h2 { font-weight: 650; }
 h3 { font-weight: 600; }
 div[data-testid="stMetric"] {
-    background-color: #F5F5F5;
+    background-color:#E91E63;
     padding: 15px;
     border-radius: 15px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.08);
