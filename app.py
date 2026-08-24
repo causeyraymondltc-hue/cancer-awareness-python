@@ -195,11 +195,11 @@ with tab_home:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        score_color = " if st.session_state.awareness_score < 30 else "🟡" if st.session_state.awareness_score < 55 else "🔴"
+        score_color = " if st.session_state.awareness_score < 30 else " if st.session_state.awareness_score < 55 else "🔴"
         st.metric(f"{score_color} Awareness", f"{st.session_state.awareness_score}/100")
 
     with col2:
-        water_emoji = " if st.session_state.water < 8 else "✅"
+        water_emoji = " if st.session_state.water < 8 else "
         st.metric(f"{water_emoji} Water", f"{st.session_state.water} glasses")
 
     with col3:
