@@ -30,7 +30,7 @@ st.markdown(
     """
     <style>
     .main {
-        background-color: #F7F9FC;
+        background-color: #E91E63;
     }
 
     .block-container {
@@ -51,7 +51,7 @@ st.markdown(
     }
 
     div[data-testid="stMetric"] {
-        background-color: #FFFFFF;
+        background-color: #6A1B9A;
         padding: 15px;
         border-radius: 15px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
