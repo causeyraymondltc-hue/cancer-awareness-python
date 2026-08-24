@@ -203,11 +203,11 @@ with tab_home:
         st.metric(f"{water_emoji} Water", f"{st.session_state.water} glasses")
 
     with col3:
-        exercise_emoji = " if st.session_state.exercise < 30 else "🔥"
+        exercise_emoji = " if st.session_state.exercise < 30 else "
         st.metric(f"{exercise_emoji} Exercise", f"{st.session_state.exercise} min")
 
     with col4:
-        sleep_emoji = " if st.session_state.sleep < 7 else "✨"
+        sleep_emoji = " if st.session_state.sleep < 7 else "
         st.metric(f"{sleep_emoji} Sleep", f"{st.session_state.sleep} hrs")
 
     st.divider()
