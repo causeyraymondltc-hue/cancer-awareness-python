@@ -18,21 +18,49 @@ st.set_page_config(
 # =====================
 # CUSTOMER LOGIN / REGISTER (Demo Only)
 # =====================
-if 'users' not in st.session_state:
-    st.session_state.users = {"demo": "password"}
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.current_user = None
-if 'goals' not in st.session_state:
-    st.session_state.goals = []
-if 'score_history' not in st.session_state:
-    st.session_state.score_history = []
-if 'badges' not in st.session_state:
-    st.session_state.badges = []
 if 'demo_group' not in st.session_state:
     st.session_state.demo_group = "Prefer not to say"
 
 # =====================
+# LOGIN / REGISTER GATE
+# =====================
+if not st.session_state.logged_in:
+    st.title("🔐 Customer Access Portal")
+    st.caption("Demo authentication for portfolio — not a secure production system")
+
+    login_tab, reg_tab = st.tabs(["Login", "Sign Up / Register"])
+
+    with login_tab:
+        with st.form("login_form"):
+            user_in = st.text_input("Username")
+            pass_in = st.text_input("Password", type="password")
+            login_btn = st.form_submit_button("Login")
+            if login_btn:
+                if user_in in st.session_state.users and st.session_state.users[user_in] == pass_in:
+                    st.session_state.logged_in = True
+                    st.session_state.current_user = user_in
+                    st.success("Login successful!")
+                    st.rerun()
+                else:
+                    st.error("Wrong username or password. Try: demo / password")
+
+    with reg_tab:
+        with st.form("register_form"):
+            new_user = st.text_input("Choose a username")
+            new_pass = st.text_input("Choose a password", type="password")
+            reg_btn = st.form_submit_button("Create Account")
+            if reg_btn:
+                if new_user in st.session_state.users:
+                    st.error("Username already taken.")
+                elif not new_user or not new_pass:
+                    st.error("Please fill both fields.")
+                else:
+                    st.session_state.users[new_user] = new_pass
+                    st.success(f"Account '{new_user}' created! Now log in.")
+
+    st.info("💡 **Demo credentials:** username `demo` | password `password`")
+    st.stop()
+
 # LOGGED IN STATE: Show app + Logout option in sidebar
 # =====================
 # Show welcome message and logout button in sidebar
@@ -227,15 +255,15 @@ with tab_goals:
 # TAB 1: PROTECTION & PREVENTION
 # ==========================================
 with tab_prevention:
-    st.header("Know Your Risk Factors")     st.divider()
-    st.subheader("👤 Personalize Your Content")
-    demo_choice = st.selectbox(
+       st.header("Know Your Risk Factors") st.divider()
+st.subheader("👤 Personalize Your Content")
+demo_choice = st.selectbox(
         "I'm filling this out primarily as:",
         ["Prefer not to say", "Woman", "Man", "Youth / Young Adult (under 25)", "Older Adult (65+)"]
     )
-    st.session_state.demo_group = demo_choice
+st.session_state.demo_group = demo_choice
 
-    demo_tips = {
+demo_tips = {
         "Woman": [
             "🎗️ Discuss mammogram scheduling with your doctor based on age and family history.",
             "💉 HPV vaccination and regular cervical screening significantly reduce cervical cancer risk.",
@@ -262,17 +290,17 @@ with tab_prevention:
         ]
     }
 
-    if demo_choice in demo_tips:
+if demo_choice in demo_tips:
         st.write(f"**Tailored tips for: {demo_choice}**")
         for tip in demo_tips[demo_choice]:
             st.write("•", tip)
 
-    st.divider()
-    st.write("This educational calculator uses general lifestyle inputs. **It does not diagnose anything.**")
+st.divider()
+st.write("This educational calculator uses general lifestyle inputs. **It does not diagnose anything.**")
 
-    col1, col2 = st.columns(2)
+col1, col2 = st.columns(2)
 
-    with col1:
+with col1:
         age = st.slider("Age", 18, 100, 40)
         smoking = st.selectbox("Smoking Status", [
             "Never smoked", "Former smoker", "Current smoker"
@@ -433,8 +461,8 @@ with tab_prevention:
                 st.write(body)
         
         st.warning("⚠️ **Not clinical.** This is an educational portfolio tool. Always see a healthcare provider for real risk assessment and screening.")
-with tab_research:
-    st.header("Breast Cancer Dataset Explorer")
+        with tab_research:
+         st.header("Breast Cancer Dataset Explorer")
     st.info("""
     This loads the public **Wisconsin Breast Cancer Dataset** (built into `scikit-learn`). 
     The model predicts based on anonymized cell measurements. **This is NOT a real diagnostic tool.**
@@ -531,5 +559,5 @@ with tab_research:
     st.caption("Reminder: Real diagnosis requires biopsy, imaging, and expert pathologist review. This demo is for code/portfolio demonstration only.")
 
 # Footer
-st.divider()
-st.caption("Portfolio Project • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
+    st.divider()
+    st.caption("Portfolio Project • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
