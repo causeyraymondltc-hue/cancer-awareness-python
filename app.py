@@ -114,14 +114,14 @@ with st.sidebar:
     st.divider()
     st.caption("Your health awareness companion")
     st.divider()
-    st.write("### 📌 Quick Stats")
+    st.write("###  Quick Stats")
     st.metric("Awareness", f"{st.session_state.awareness_score}/100")
     st.metric("Water", f"{st.session_state.water}/8")
     st.metric("Exercise", f"{st.session_state.exercise} min")
     st.divider()
-    st.caption("👨‍💻 Built by [YOUR NAME]")
+    st.caption(" Built by [Toluwalope]")
     st.divider()
-    if st.button("🚪 Logout", use_container_width=True):
+    if st.button(" Logout", use_container_width=True):
         st.session_state.logged_in = False
         st.session_state.current_user = None
         st.rerun()
@@ -143,20 +143,20 @@ st.caption("CancerGuard AI was created to make cancer-related information easier
 # NAVIGATION TABS
 # =====================
 tab_home, tab_prevention, tab_lifestyle, tab_goals, tab_learn, tab_research, tab_profile = st.tabs([
-    "🏠 Dashboard",
-    "🛡️ Prevention",
-    "❤️ Healthy Living",
-    "🎯 Goals",
-    "📚 Learn",
-    "🤖 ML Research",
-    "👤 Profile"
+    " Dashboard",
+    " Prevention",
+    " Healthy Living",
+    " Goals",
+    " Learn",
+    " ML Research",
+    " Profile"
 ])
 
 # ==========================================
 # TAB 1: DASHBOARD
 # ==========================================
 with tab_home:
-    st.title("🏠 Your Health Dashboard")
+    st.title(" Your Health Dashboard")
     st.subheader(f"Welcome back, {st.session_state.current_user} 👋")
     st.write("Track your healthy habits and improve your health awareness.")
     st.divider()
@@ -171,33 +171,33 @@ with tab_home:
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("🛡️ Awareness Score", f"{st.session_state.awareness_score}/100")
+        st.metric(" Awareness Score", f"{st.session_state.awareness_score}/100")
     with col2:
-        st.metric("💧 Water", f"{st.session_state.water} glasses")
+        st.metric(" Water", f"{st.session_state.water} glasses")
     with col3:
-        st.metric("🏃 Exercise", f"{st.session_state.exercise} min")
+        st.metric(" Exercise", f"{st.session_state.exercise} min")
     with col4:
-        st.metric("😴 Sleep", f"{st.session_state.sleep} hrs")
+        st.metric(" Sleep", f"{st.session_state.sleep} hrs")
 
     st.divider()
-    st.subheader("🌱 Today's Health Tip")
+    st.subheader(" Today's Health Tip")
     st.success(
         "Avoid tobacco, stay physically active, maintain a healthy diet, "
         "protect your skin from excessive UV exposure, and keep up with "
         "appropriate health screenings."
     )
 
-    st.subheader("⚡ Quick Actions")
+    st.subheader(" Quick Actions")
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.info("🛡️ Check your prevention awareness")
+        st.info(" Check your prevention awareness")
     with c2:
-        st.info("❤️ Track today's healthy habits")
+        st.info(" Track today's healthy habits")
     with c3:
-        st.info("📚 Learn about cancer prevention")
+        st.info(" Learn about cancer prevention")
 
     st.divider()
-    st.subheader("📊 Your Healthy Living Progress")
+    st.subheader(" Your Healthy Living Progress")
     progress_data = pd.DataFrame({
         "Habit": ["Water", "Exercise", "Sleep", "Daily Habits"],
         "Progress": [
@@ -217,9 +217,9 @@ with tab_home:
 # TAB 2: PREVENTION
 # ==========================================
 with tab_prevention:
-    st.header("🛡️ Prevention Awareness")
+    st.header(" Prevention Awareness")
     st.divider()
-    st.subheader("👤 Personalize Your Content")
+    st.subheader(" Personalize Your Content")
     demo_choice = st.selectbox(
         "I'm filling this out primarily as:",
         ["Prefer not to say", "Woman", "Man", "Youth / Young Adult (under 25)", "Older Adult (65+)"],
@@ -229,28 +229,28 @@ with tab_prevention:
 
     demo_tips = {
         "Woman": [
-            "🎗️ Discuss mammogram scheduling with your doctor based on age and family history.",
-            "💉 HPV vaccination and regular cervical screening significantly reduce cervical cancer risk.",
-            "🤱 Breast self-awareness: know what's normal for you and report changes promptly.",
-            "🍷 Alcohol has a strong link to breast cancer risk — even small reductions help."
+            " Discuss mammogram scheduling with your doctor based on age and family history.",
+            " HPV vaccination and regular cervical screening significantly reduce cervical cancer risk.",
+            " Breast self-awareness: know what's normal for you and report changes promptly.",
+            " Alcohol has a strong link to breast cancer risk — even small reductions help."
         ],
         "Man": [
-            "🩺 Talk to your doctor about prostate health discussions appropriate for your age.",
-            "🚭 Smoking cessation dramatically reduces lung and other cancer risks.",
-            "☀️ Men have higher rates of skin cancer diagnosis — daily sun protection matters.",
-            "🥗 Reducing processed/red meat and increasing fiber supports colorectal health."
+            " Talk to your doctor about prostate health discussions appropriate for your age.",
+            " Smoking cessation dramatically reduces lung and other cancer risks.",
+            " Men have higher rates of skin cancer diagnosis — daily sun protection matters.",
+            " Reducing processed/red meat and increasing fiber supports colorectal health."
         ],
         "Youth / Young Adult (under 25)": [
-            "💉 HPV vaccination is most effective when given younger — ask if not yet done.",
-            "🚭 Never starting tobacco/vaping is the single best prevention step.",
-            "☀️ Sunburns in youth significantly raise lifetime skin cancer risk — protect early.",
-            "🏃 Building lifelong activity and healthy eating habits now pays off for decades."
+            " HPV vaccination is most effective when given younger — ask if not yet done.",
+            " Never starting tobacco/vaping is the single best prevention step.",
+            " Sunburns in youth significantly raise lifetime skin cancer risk — protect early.",
+            " Building lifelong activity and healthy eating habits now pays off for decades."
         ],
         "Older Adult (65+)": [
-            "🩺 Stay current with age-appropriate screenings (colorectal, breast, prostate, skin checks).",
-            "👨‍👩‍👧 Involve family or caregivers in tracking appointments and health goals.",
-            "🥗 Nutrient-dense foods support overall health alongside cancer prevention.",
-            "💬 Discuss any new or unusual symptoms with your doctor promptly."
+            " Stay current with age-appropriate screenings (colorectal, breast, prostate, skin checks).",
+            " Involve family or caregivers in tracking appointments and health goals.",
+            " Nutrient-dense foods support overall health alongside cancer prevention.",
+            " Discuss any new or unusual symptoms with your doctor promptly."
         ]
     }
 
@@ -309,20 +309,20 @@ with tab_prevention:
     st.divider()
     st.subheader("Evidence-Based Protection Tips")
     tips = [
-        "🚭 Avoid all tobacco products.",
-        "🥗 Eat a diet rich in vegetables, fruits, whole grains; limit processed meats.",
-        "🏃 Maintain regular physical activity.",
-        "☀️ Protect skin from UV radiation (sunscreen, shade, clothing).",
-        "🍷 Limit alcohol; avoid heavy drinking.",
-        "🩺 Follow age-appropriate cancer screening guidelines (consult your doctor).",
-        "💉 Consider vaccinations (e.g., HPV, Hepatitis B) where medically appropriate."
+        " Avoid all tobacco products.",
+        " Eat a diet rich in vegetables, fruits, whole grains; limit processed meats.",
+        " Maintain regular physical activity.",
+        " Protect skin from UV radiation (sunscreen, shade, clothing).",
+        " Limit alcohol; avoid heavy drinking.",
+        " Follow age-appropriate cancer screening guidelines (consult your doctor).",
+        " Consider vaccinations (e.g., HPV, Hepatitis B) where medically appropriate."
     ]
     for t in tips:
         st.write("•", t)
     st.caption("References for display: WHO, CDC, NCI. Used for education only.")
 
     st.divider()
-    st.subheader("🔍 Advanced Awareness Calculator")
+    st.subheader(" Advanced Awareness Calculator")
     st.info("Answer these questions for an expanded educational profile. Not clinical.")
 
     with st.form("advanced_risk"):
@@ -401,11 +401,11 @@ with tab_prevention:
 # TAB 3: HEALTHY LIVING
 # ==========================================
 with tab_lifestyle:
-    st.title("❤️ Healthy Living")
+    st.title(" Healthy Living")
     st.write("Track simple daily habits that support a healthier lifestyle.")
     st.divider()
 
-    st.subheader("💧 Water Intake")
+    st.subheader(" Water Intake")
     water = st.slider("How many glasses of water have you taken today?", 0, 15, key="water")
     st.progress(min(water / 15, 1.0))
     if water >= 8:
@@ -414,7 +414,7 @@ with tab_lifestyle:
         st.info(f"You need about {8 - water} more glasses to reach 8.")
 
     st.divider()
-    st.subheader("🏃 Exercise")
+    st.subheader(" Exercise")
     exercise = st.slider("Minutes of exercise today", 0, 180, key="exercise")
     if exercise >= 30:
         st.success("Excellent! You've completed 30+ minutes of activity.")
@@ -422,7 +422,7 @@ with tab_lifestyle:
         st.info(f"{30 - exercise} more minutes to reach today's goal.")
 
     st.divider()
-    st.subheader("😴 Sleep")
+    st.subheader(" Sleep")
     sleep = st.slider("Hours of sleep last night", 0.0, 12.0, step=0.5, key="sleep")
     if sleep >= 7:
         st.success("Good sleep duration!")
@@ -430,12 +430,12 @@ with tab_lifestyle:
         st.warning("Try to improve your sleep routine.")
 
     st.divider()
-    st.subheader("✅ Today's Healthy Habits")
-    st.checkbox("🥗 Ate fruits and vegetables", key="habit_diet")
-    st.checkbox("🚭 Avoided tobacco", key="habit_tobacco")
-    st.checkbox("🏃 Completed physical activity", key="habit_activity")
-    st.checkbox("☀️ Protected myself from excessive sun exposure", key="habit_sun")
-    st.checkbox("🩺 Stayed up to date with health checks", key="habit_screening")
+    st.subheader(" Today's Healthy Habits")
+    st.checkbox(" Ate fruits and vegetables", key="habit_diet")
+    st.checkbox(" Avoided tobacco", key="habit_tobacco")
+    st.checkbox(" Completed physical activity", key="habit_activity")
+    st.checkbox(" Protected myself from excessive sun exposure", key="habit_sun")
+    st.checkbox(" Stayed up to date with health checks", key="habit_screening")
 
     completed = sum([
         st.session_state.habit_diet,
@@ -447,13 +447,13 @@ with tab_lifestyle:
     st.write(f"### Daily Habit Score: {completed}/5")
     st.progress(completed / 5)
     if completed == 5:
-        st.success("🎉 Excellent! You completed all your habits today.")
+        st.success(" Excellent! You completed all your habits today.")
 
 # ==========================================
 # TAB 4: GOALS & PROGRESS
 # ==========================================
 with tab_goals:
-    st.header("🎯 Your Prevention Goals & Progress")
+    st.header(" Your Prevention Goals & Progress")
     st.caption("Set simple, achievable goals based on your awareness profile.")
 
     preset_goals = [
@@ -497,14 +497,14 @@ with tab_goals:
 
         if pct == 1 and total > 0:
             st.balloons()
-            st.success("🏆 All goals completed! Great work on your prevention journey.")
+            st.success(" All goals completed! Great work on your prevention journey.")
 
-        if st.button("🗑️ Clear All Goals"):
+        if st.button(" Clear All Goals"):
             st.session_state.goals = []
             st.rerun()
 
     st.divider()
-    st.subheader("📈 Your Awareness Score Trend")
+    st.subheader(" Your Awareness Score Trend")
     if len(st.session_state.score_history) == 0:
         st.write("No score history yet. Complete the Advanced Calculator in the Prevention tab to start tracking.")
     else:
@@ -521,18 +521,18 @@ with tab_goals:
 # TAB 5: LEARN & QUIZ
 # ==========================================
 with tab_learn:
-    st.title("📚 Cancer Awareness & Education")
+    st.title(" Cancer Awareness & Education")
     st.write("Explore simple educational information about cancer prevention and healthy living.")
     st.divider()
 
     topics = {
-        "🎗️ Cancer Awareness": "Cancer refers to a group of diseases involving abnormal cell growth. Learning about prevention, risk factors and appropriate screening can help people make informed health decisions.",
-        "🚭 Tobacco": "Avoiding tobacco is an important way to reduce the risk of several cancers and other serious health problems.",
-        "🥗 Healthy Diet": "A balanced diet that includes vegetables, fruits, whole grains and appropriate protein sources supports overall health.",
-        "🏃 Physical Activity": "Regular physical activity supports overall wellbeing and can help maintain a healthy body weight.",
-        "☀️ Sun Protection": "Excessive ultraviolet exposure can damage the skin. Protective clothing, shade and appropriate sunscreen can help reduce UV exposure.",
-        "💉 Vaccination": "Some infections are associated with cancer. Vaccines such as HPV and hepatitis B vaccines can help prevent certain infections where medically appropriate.",
-        "🩺 Screening": "Cancer screening recommendations depend on factors such as age, sex, family history and personal health history. Speak with a qualified healthcare professional about appropriate screening."
+        " Cancer Awareness": "Cancer refers to a group of diseases involving abnormal cell growth. Learning about prevention, risk factors and appropriate screening can help people make informed health decisions.",
+        " Tobacco": "Avoiding tobacco is an important way to reduce the risk of several cancers and other serious health problems.",
+        " Healthy Diet": "A balanced diet that includes vegetables, fruits, whole grains and appropriate protein sources supports overall health.",
+        " Physical Activity": "Regular physical activity supports overall wellbeing and can help maintain a healthy body weight.",
+        " Sun Protection": "Excessive ultraviolet exposure can damage the skin. Protective clothing, shade and appropriate sunscreen can help reduce UV exposure.",
+        " Vaccination": "Some infections are associated with cancer. Vaccines such as HPV and hepatitis B vaccines can help prevent certain infections where medically appropriate.",
+        " Screening": "Cancer screening recommendations depend on factors such as age, sex, family history and personal health history. Speak with a qualified healthcare professional about appropriate screening."
     }
 
     for title, content in topics.items():
@@ -540,7 +540,7 @@ with tab_learn:
             st.write(content)
 
     st.divider()
-    st.subheader("📝 Test Your Knowledge")
+    st.subheader(" Test Your Knowledge")
     st.caption("Short quiz based on public health prevention guidelines. Earn badges as you learn!")
 
     quiz_questions = [
@@ -633,7 +633,7 @@ with tab_learn:
 # TAB 6: ML RESEARCH
 # ==========================================
 with tab_research:
-    st.header("🤖 Educational ML Research Lab")
+    st.header(" Educational ML Research Lab")
     st.info("""
     This section demonstrates how machine learning can be applied to an anonymized breast cancer dataset.
 
@@ -725,7 +725,7 @@ with tab_profile:
         key="health_goal"
     )
 
-    if st.button("💾 Save Profile"):
+    if st.button(" Save Profile"):
         st.success("Profile updated successfully!")
 
 # =====================
