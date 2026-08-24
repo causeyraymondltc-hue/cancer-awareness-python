@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import random
+import json
+import os
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
@@ -16,6 +18,21 @@ st.set_page_config(
     page_icon="🩺",
     layout="wide"
 )
+
+# =====================
+# USER PERSISTENCE (File-Based)
+# =====================
+USER_FILE = "users.json"
+
+def load_users():
+    if os.path.exists(USER_FILE):
+        with open(USER_FILE, "r") as f:
+            return json.load(f)
+    return {"demo": "password"}
+
+def save_users(users_dict):
+    with open(USER_FILE, "w") as f:
+        json.dump(users_dict, f)
 
 # =====================
 # CUSTOM STYLING
@@ -42,7 +59,7 @@ div[data-testid="stMetric"] {
 # SESSION STATE INITIALIZATION
 # =====================
 defaults = {
-    "users": {"demo": "password"},
+    "users": load_users(),
     "logged_in": False,
     "current_user": None,
     "goals": [],
@@ -104,6 +121,7 @@ if not st.session_state.logged_in:
                     st.error("Please fill both fields.")
                 else:
                     st.session_state.users[new_user] = new_pass
+                    save_users(st.session_state.users)
                     st.success(f"Account '{new_user}' created! Now log in.")
 
     st.info(" **Healthy Choices. Stronger Future | password `password`")
@@ -114,11 +132,11 @@ if not st.session_state.logged_in:
 # =====================
 with st.sidebar:
     st.title("🩺 CancerGuard AI")
-    st.write(f"👤 **{st.session_state.current_user}**")
+    st.write(f" **{st.session_state.current_user}**")
     st.divider()
     st.caption("Your health awareness companion")
     st.divider()
-    st.write("###  Quick Stats")
+    st.write("### Quick Stats")
     st.metric("Awareness", f"{st.session_state.awareness_score}/100")
     st.metric("Water", f"{st.session_state.water}/8")
     st.metric("Exercise", f"{st.session_state.exercise} min")
@@ -177,19 +195,19 @@ with tab_home:
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        score_color = "🟢" if st.session_state.awareness_score < 30 else "🟡" if st.session_state.awareness_score < 55 else "🔴"
+        score_color = " if st.session_state.awareness_score < 30 else "🟡" if st.session_state.awareness_score < 55 else "🔴"
         st.metric(f"{score_color} Awareness", f"{st.session_state.awareness_score}/100")
 
     with col2:
-        water_emoji = "💧" if st.session_state.water < 8 else "✅"
+        water_emoji = " if st.session_state.water < 8 else "✅"
         st.metric(f"{water_emoji} Water", f"{st.session_state.water} glasses")
 
     with col3:
-        exercise_emoji = "🏃" if st.session_state.exercise < 30 else "🔥"
+        exercise_emoji = " if st.session_state.exercise < 30 else "🔥"
         st.metric(f"{exercise_emoji} Exercise", f"{st.session_state.exercise} min")
 
     with col4:
-        sleep_emoji = "😴" if st.session_state.sleep < 7 else "✨"
+        sleep_emoji = " if st.session_state.sleep < 7 else "✨"
         st.metric(f"{sleep_emoji} Sleep", f"{st.session_state.sleep} hrs")
 
     st.divider()
@@ -416,7 +434,7 @@ with tab_prevention:
 
         st.subheader("Evidence-Based Actions")
         adv_tips = []
-        if a_smoke != "Never": adv_tips.append(("🚭 Tobacco", "Quitting at any age reduces risk. Seek support."))
+        if a_smoke != "Never": adv_tips.append((" Tobacco", "Quitting at any age reduces risk. Seek support."))
         if "15+" in a_alc or "8-14" in a_alc: adv_tips.append(("🍷 Alcohol", "Lower intake reduces multiple cancer risks."))
         if "Obese" in a_weight or "Overweight" in a_weight: adv_tips.append(("⚖️ Weight", "Healthy weight lowers risk for 13 cancer types."))
         if "<2" in a_veg or "Most days" in a_meat or "3-5x/wk" in a_meat: adv_tips.append(("🥗 Diet", "More plants/whole grains; less processed meat."))
@@ -431,7 +449,7 @@ with tab_prevention:
                 st.markdown(f"**{title}**")
                 st.write(body)
 
-        st.warning("⚠️ **Not clinical.** This is an educational portfolio tool. Always see a healthcare provider for real risk assessment and screening.")
+        st.warning(" **Not clinical.** This is an educational portfolio tool. Always see a healthcare provider for real risk assessment and screening.")
 
 # ==========================================
 # TAB 3: HEALTHY LIVING
@@ -537,7 +555,7 @@ with tab_goals:
 
         if pct == 1 and total > 0:
             st.balloons()
-            st.success("🏆 All goals completed! Great work on your prevention journey.")
+            st.success(" All goals completed! Great work on your prevention journey.")
 
         if st.button(" Clear All Goals"):
             st.session_state.goals = []
@@ -582,13 +600,13 @@ with tab_challenge:
     st.write(description)
 
     if not st.session_state.challenge_done:
-        if st.button("✅ Mark Challenge Complete"):
+        if st.button(" Mark Challenge Complete"):
             st.session_state.challenge_done = True
             st.balloons()
             st.success("🎉 Amazing! Challenge completed!")
     else:
-        st.success("✅ This week's challenge is complete!")
-        if st.button("➡️ Start Next Week's Challenge"):
+        st.success(" This week's challenge is complete!")
+        if st.button(" Start Next Week's Challenge"):
             st.session_state.challenge_week += 1
             st.session_state.challenge_done = False
             st.rerun()
@@ -741,7 +759,7 @@ with tab_research:
     st.info("""
     This section demonstrates how machine learning can be applied to an anonymized breast cancer dataset.
 
-    ⚠️ This is an educational and portfolio demonstration. It is **NOT** a medical diagnostic system.
+    ⚠️ This is an educational and CancerGuardAI demonstration. It is **NOT** a medical diagnostic system.
     """)
 
     @st.cache_data
