@@ -15,9 +15,22 @@ st.set_page_config(
     page_icon="🩺",
     layout="centered"
 )
+
 # =====================
-# CUSTOMER LOGIN / REGISTER (Demo Only)
+# SESSION STATE INITIALIZATION (must come before login check)
 # =====================
+if 'users' not in st.session_state:
+    st.session_state.users = {"demo": "password"}
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = None
+if 'goals' not in st.session_state:
+    st.session_state.goals = []
+if 'score_history' not in st.session_state:
+    st.session_state.score_history = []
+if 'badges' not in st.session_state:
+    st.session_state.badges = []
 if 'demo_group' not in st.session_state:
     st.session_state.demo_group = "Prefer not to say"
 
@@ -61,9 +74,9 @@ if not st.session_state.logged_in:
     st.info("💡 **Demo credentials:** username `demo` | password `password`")
     st.stop()
 
-# LOGGED IN STATE: Show app + Logout option in sidebar
 # =====================
-# Show welcome message and logout button in sidebar
+# SIDEBAR (only shows once logged in)
+# =====================
 with st.sidebar:
     st.write(f"👤 Welcome, **{st.session_state.current_user}**")
     if st.button("Logout"):
@@ -72,16 +85,17 @@ with st.sidebar:
         st.rerun()
     st.divider()
     st.caption("Customer Portal Active")
+
 # =====================
-# GLOBAL MEDICAL DISCLAIMER (Must be visible everywhere)
+# GLOBAL MEDICAL DISCLAIMER
 # =====================
 st.warning("""
- **CancerGuard AI, health data, and machine learning to help people understand cancer risk factors, discover prevention strategies, explore cancer research, and recognize when professional screening may be important..
+**CancerGuard AI** uses health data and machine learning to help people understand cancer risk factors, discover prevention strategies, explore cancer research, and recognize when professional screening may be important.
 """)
 
 st.title("🩺 Cancer Awareness & Educational Guard AI")
-st.subheader(" Turning Cancer Data Into Prevention, Awareness & Early Action") 
-st.image("https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80", 
+st.subheader("Turning Cancer Data Into Prevention, Awareness & Early Action")
+st.image("https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=800&q=80",
          caption="Medical Research & Education — Source: Unsplash (Free)")
 st.caption("CancerGuard AI was created to make cancer-related information easier to understand and explore.")
 
@@ -95,6 +109,9 @@ tab_learn, tab_goals, tab_prevention, tab_research = st.tabs([
     "🔬 Educational ML Research Demo"
 ])
 
+# ==========================================
+# TAB: LEARN & QUIZ
+# ==========================================
 with tab_learn:
     st.header("📚 Learn & Test Your Knowledge")
     st.caption("Short quiz based on public health prevention guidelines. Earn badges as you learn!")
@@ -185,6 +202,9 @@ with tab_learn:
     else:
         st.write("No badges yet — complete the quiz above!")
 
+# ==========================================
+# TAB: PREVENTION GOALS
+# ==========================================
 with tab_goals:
     st.header("🎯 Your Prevention Goals & Progress")
     st.caption("Set simple, achievable goals based on your awareness profile.")
@@ -252,19 +272,19 @@ with tab_goals:
         st.plotly_chart(fig_trend, use_container_width=True)
 
 # ==========================================
-# TAB 1: PROTECTION & PREVENTION
+# TAB: PROTECTION & PREVENTION
 # ==========================================
 with tab_prevention:
-       st.header("Know Your Risk Factors") 
-       st.divider()
-st.subheader("👤 Personalize Your Content")
-demo_choice = st.selectbox(
+    st.header("Know Your Risk Factors")
+    st.divider()
+    st.subheader("👤 Personalize Your Content")
+    demo_choice = st.selectbox(
         "I'm filling this out primarily as:",
         ["Prefer not to say", "Woman", "Man", "Youth / Young Adult (under 25)", "Older Adult (65+)"]
     )
-st.session_state.demo_group = demo_choice
+    st.session_state.demo_group = demo_choice
 
-demo_tips = {
+    demo_tips = {
         "Woman": [
             "🎗️ Discuss mammogram scheduling with your doctor based on age and family history.",
             "💉 HPV vaccination and regular cervical screening significantly reduce cervical cancer risk.",
@@ -291,17 +311,17 @@ demo_tips = {
         ]
     }
 
-if demo_choice in demo_tips:
+    if demo_choice in demo_tips:
         st.write(f"**Tailored tips for: {demo_choice}**")
         for tip in demo_tips[demo_choice]:
             st.write("•", tip)
 
-st.divider()
-st.write("This educational calculator uses general lifestyle inputs. **It does not diagnose anything.**")
+    st.divider()
+    st.write("This educational calculator uses general lifestyle inputs. **It does not diagnose anything.**")
 
-col1, col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
-with col1:
+    with col1:
         age = st.slider("Age", 18, 100, 40)
         smoking = st.selectbox("Smoking Status", [
             "Never smoked", "Former smoker", "Current smoker"
@@ -327,7 +347,6 @@ with col1:
             "Active (150+ min)", "Moderate (some)", "Mostly sedentary"
         ])
 
-    # Simple educational scoring logic (arbitrary weights for demo)
     score = 0
     if age > 60: score += 20
     elif age > 45: score += 12
@@ -381,13 +400,6 @@ with col1:
 
     st.caption("References for display: WHO, CDC, NCI. Used for education only.")
 
-# ==========================================
-# TAB 2: EDUCATIONAL ML DEMO
-# ==========================================
-
-    # ==========================================
-    # NEW ADDED FEATURE: Multi-Factor Risk Questionnaire
-    # ==========================================
     st.divider()
     st.subheader("🔍 Advanced Awareness Calculator")
     st.info("Answer these questions for an expanded educational profile. Not clinical.")
@@ -407,7 +419,7 @@ with col1:
             a_meat = st.selectbox("Processed Meat", ["Rare/None", "1-2x/wk", "3-5x/wk", "Most days"])
             a_sun = st.selectbox("Sun Protection", ["Always", "Sometimes", "Rarely / Burn"])
             a_screen = st.selectbox("Screenings", ["Up to date", "Partial", "Not up to date"])
-        
+
         btn = st.form_submit_button("Generate Awareness Profile")
 
     if btn:
@@ -430,40 +442,45 @@ with col1:
         if "1st degree" in a_family: pts += 14; flags.append("1st degree family")
         elif "2nd degree" in a_family: pts += 7
 
-        score = min(pts, 100) st.session_state.score_history.append(score)
-        
-        if score >= 50:
-            level, color = "Higher Awareness Profile", "red"
-        elif score >= 25:
-            level, color = "Moderate Awareness", "orange"
+        score2 = min(pts, 100)
+        st.session_state.score_history.append(score2)
+
+        if score2 >= 50:
+            level = "Higher Awareness Profile"
+        elif score2 >= 25:
+            level = "Moderate Awareness"
         else:
-            level, color = "Lower Awareness Profile", "green"
-        
+            level = "Lower Awareness Profile"
+
         st.subheader(f"Profile: {level}")
-        st.progress(score / 100.0)
-        st.write(f"Score: **{score}/100**")
+        st.progress(score2 / 100.0)
+        st.write(f"Score: **{score2}/100**")
         st.write("Factors noted:", ", ".join(flags) if flags else "None major flagged")
-        
+
         st.subheader("Evidence-Based Actions")
-        tips = []
-        if a_smoke != "Never": tips.append(("🚭 Tobacco", "Quitting at any age reduces risk. Seek support."))
-        if "15+" in a_alc or "8-14" in a_alc: tips.append(("🍷 Alcohol", "Lower intake reduces multiple cancer risks."))
-        if "Obese" in a_weight or "Overweight" in a_weight: tips.append(("⚖️ Weight", "Healthy weight lowers risk for 13 cancer types."))
-        if "<2" in a_veg or "Most days" in a_meat or "3-5x/wk" in a_meat: tips.append(("🥗 Diet", "More plants/whole grains; less processed meat."))
-        if "Rarely" in a_sun or "Sometimes" in a_sun: tips.append(("☀️ Sun", "SPF 30+, shade, protective clothing."))
-        if "Not up to date" in a_screen: tips.append(("🩺 Screening", "Consult your GP for age-appropriate tests."))
-        if "1st degree" in a_family or "2nd degree" in a_family: tips.append(("👨‍👩‍👧 Family", "Discuss earlier/additional screening with doctor."))
-        tips.append(("💉 Vaccines", "HPV / Hep B vaccines where appropriate."))
-        tips.append(("📚 Source", "Cancer Council Australia, WHO, NCI — for education only."))
-        
-        for title, body in tips:
+        adv_tips = []
+        if a_smoke != "Never": adv_tips.append(("🚭 Tobacco", "Quitting at any age reduces risk. Seek support."))
+        if "15+" in a_alc or "8-14" in a_alc: adv_tips.append(("🍷 Alcohol", "Lower intake reduces multiple cancer risks."))
+        if "Obese" in a_weight or "Overweight" in a_weight: adv_tips.append(("⚖️ Weight", "Healthy weight lowers risk for 13 cancer types."))
+        if "<2" in a_veg or "Most days" in a_meat or "3-5x/wk" in a_meat: adv_tips.append(("🥗 Diet", "More plants/whole grains; less processed meat."))
+        if "Rarely" in a_sun or "Sometimes" in a_sun: adv_tips.append(("☀️ Sun", "SPF 30+, shade, protective clothing."))
+        if "Not up to date" in a_screen: adv_tips.append(("🩺 Screening", "Consult your GP for age-appropriate tests."))
+        if "1st degree" in a_family or "2nd degree" in a_family: adv_tips.append(("👨‍👩‍👧 Family", "Discuss earlier/additional screening with doctor."))
+        adv_tips.append(("💉 Vaccines", "HPV / Hep B vaccines where appropriate."))
+        adv_tips.append(("📚 Source", "Cancer Council Australia, WHO, NCI — for education only."))
+
+        for title, body in adv_tips:
             with st.container(border=True):
                 st.markdown(f"**{title}**")
                 st.write(body)
-        
+
         st.warning("⚠️ **Not clinical.** This is an educational portfolio tool. Always see a healthcare provider for real risk assessment and screening.")
-        with tab_research:
-         st.header("Breast Cancer Dataset Explorer")
+
+# ==========================================
+# TAB: EDUCATIONAL ML DEMO
+# ==========================================
+with tab_research:
+    st.header("Breast Cancer Dataset Explorer")
     st.info("""
     This loads the public **Wisconsin Breast Cancer Dataset** (built into `scikit-learn`). 
     The model predicts based on anonymized cell measurements. **This is NOT a real diagnostic tool.**
@@ -482,7 +499,6 @@ with col1:
     st.write("Sample of anonymized measurements:")
     st.dataframe(df.head())
 
-    # Train / Test split
     X = df.drop("diagnosis", axis=1)
     y = df["diagnosis"]
     X_train, X_test, y_train, y_test = train_test_split(
@@ -502,7 +518,6 @@ with col1:
         st.write("**0** = Malignant")
         st.write("**1** = Benign")
 
-    # Feature importance chart
     st.subheader("Top Features Driving This Educational Model")
     importance_df = pd.DataFrame({
         "Feature": X.columns,
@@ -521,7 +536,6 @@ with col1:
     fig.update_layout(yaxis_categoryorder="total ascending")
     st.plotly_chart(fig, use_container_width=True)
 
-    # Interactive educational prediction
     st.subheader("Interactive Learning: Adjust a Feature")
     st.write("Move the slider to see how one feature changes the model's output. **This is hypothetical.**")
 
@@ -538,7 +552,6 @@ with col1:
         step=0.1
     )
 
-    # Make a single-row copy of first row and change just this feature
     sample_row = X.iloc[[0]].copy()
     sample_row[feature_choice] = user_value
 
@@ -559,6 +572,8 @@ with col1:
 
     st.caption("Reminder: Real diagnosis requires biopsy, imaging, and expert pathologist review. This demo is for code/portfolio demonstration only.")
 
-# Footer
-    st.divider()
-    st.caption("Portfolio Project • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
+# =====================
+# FOOTER
+# =====================
+st.divider()
+st.caption("Portfolio Project • Not a medical product • Data source: sklearn.datasets.load_breast_cancer")
