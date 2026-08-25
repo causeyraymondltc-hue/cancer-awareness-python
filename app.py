@@ -4,13 +4,14 @@ import random
 import json
 import os
 import hashlib
+from datetime import datetime, timedelta
 
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
-
 import plotly.express as px
+import extra_streamlit_components as stx
 
 
 # =====================================================
@@ -29,39 +30,18 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .main {
-        background-color: #E91E63;
-    }
-
-    .block-container {
-        padding-top: 2rem;
-        padding-bottom: 3rem;
-    }
-
-    [data-testid="stSidebar"] {
-        background-color: #E91E63;
-    }
-
-    [data-testid="stSidebar"] * {
-        color: white;
-    }
-
-    h1, h2, h3 {
-        font-weight: 700;
-    }
-
+    .main { background-color: #E91E63; }
+    .block-container { padding-top: 2rem; padding-bottom: 3rem; }
+    [data-testid="stSidebar"] { background-color: #E91E63; }
+    [data-testid="stSidebar"] * { color: white; }
+    h1, h2, h3 { font-weight: 700; }
     div[data-testid="stMetric"] {
         background-color: #6A1B9A;
         padding: 15px;
         border-radius: 15px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
-
-    .stButton > button {
-        border-radius: 10px;
-        font-weight: 600;
-    }
-
+    .stButton > button { border-radius: 10px; font-weight: 600; }
     .app-footer {
         text-align: center;
         padding: 20px;
@@ -75,50 +55,87 @@ st.markdown(
 
 
 # =====================================================
+# COOKIE MANAGER (Remember Me)
+# =====================================================
+def get_cookie_manager():
+    return stx.CookieManager(key="cancerguard_cookie_manager")
+
+cookie_manager = get_cookie_manager()
+
+
+# =====================================================
 # USER ACCOUNT STORAGE
 # =====================================================
 USER_FILE = "users.json"
 
 
-def hash_password(password):
-    """Convert a password into a hash for demo authentication."""
-    return hashlib.sha256(
-        password.encode("utf-8")
-    ).hexdigest()
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def load_users():
-    """Load users from the users.json file."""
     if os.path.exists(USER_FILE):
         try:
             with open(USER_FILE, "r", encoding="utf-8") as file:
                 saved_users = json.load(file)
 
             converted_users = {}
-
             for username, password in saved_users.items():
-                # Converts old plain-text passwords into hashes.
-                if len(password) == 64:
+                if len(str(password)) == 64:
                     converted_users[username] = password
                 else:
-                    converted_users[username] = hash_password(password)
-
+                    converted_users[username] = hash_password(str(password))
             return converted_users
-
         except Exception:
-            return {
-                "demo": hash_password("password")
-            }
-
-    return {
-        "demo": hash_password("password")
-    }
+            return {"demo": hash_password("password")}
+    return {"demo": hash_password("password")}
 
 
 def save_users(users):
-    """Save users to the users.json file."""
     with open(USER_FILE, "w", encoding="utf-8") as file:
         json.dump(users, file, indent=4)
+
+
+def set_remember_cookie(username: str, days: int = 7):
+    expiry = datetime.utcnow() + timedelta(days=days)
+    token = f"{username}|{expiry.isoformat()}"
+    cookie_manager.set("cg_session", token, expires_at=expiry)
+
+
+def clear_remember_cookie():
+    cookie_manager.delete("cg_session")
+
+
+def try_auto_login_from_cookie(users_dict) -> bool:
+    """Return True if cookie restored a valid session."""
+    saved = cookie_manager.get("cg_session")
+    if not saved or not isinstance(saved, str) or "|" not in saved:
+        return False
+    try:
+        saved_user, expiry_str = saved.split("|", 1)
+        if datetime.fromisoformat(expiry_str) <= datetime.utcnow():
+            clear_remember_cookie()
+            return False
+        if saved_user in users_dict:
+            st.session_state.logged_in = True
+            st.session_state.current_user = saved_user
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def ensure_google_user(email: str, full_name: str = ""):
+    """Create a local profile row for Google users if missing."""
+    email = email.strip().lower()
+    if not email:
+        return
+    if email not in st.session_state.users:
+        # Unusable random local password (Google users sign in via Google)
+        st.session_state.users[email] = hash_password(os.urandom(16).hex())
+        save_users(st.session_state.users)
+    if full_name and not st.session_state.get("full_name"):
+        st.session_state.full_name = full_name
 
 
 # =====================================================
@@ -128,33 +145,27 @@ default_values = {
     "users": load_users(),
     "logged_in": False,
     "current_user": None,
-
     "goals": [],
     "score_history": [],
     "badges": [],
     "demo_group": "Prefer not to say",
-
     "water": 0,
     "exercise": 0,
     "sleep": 7.0,
-
     "habit_diet": False,
     "habit_tobacco": False,
     "habit_activity": False,
     "habit_sun": False,
     "habit_screening": False,
-
     "awareness_score": 0,
-
     "full_name": "",
     "profile_age": 30,
     "health_goal": "Improve my diet",
-
     "daily_quote": None,
     "challenge_week": 1,
-    "challenge_done": False
+    "challenge_done": False,
+    "auth_checked": False,
 }
-
 
 for key, value in default_values.items():
     if key not in st.session_state:
@@ -162,123 +173,114 @@ for key, value in default_values.items():
 
 
 # =====================================================
-# LOGIN AND REGISTRATION
+# AUTH RESTORE (cookie + optional Streamlit Google auth)
+# =====================================================
+# 1) Cookie remember-me
+if not st.session_state.logged_in:
+    try_auto_login_from_cookie(st.session_state.users)
+
+# 2) Streamlit native Google auth (if configured in secrets [auth])
+# Works on Streamlit versions that support st.user / st.login
+if not st.session_state.logged_in:
+    try:
+        # Newer Streamlit identity API
+        if hasattr(st, "user") and getattr(st.user, "is_logged_in", False):
+            email = (getattr(st.user, "email", None) or "").strip().lower()
+            name = getattr(st.user, "name", "") or email
+            if email:
+                ensure_google_user(email, name)
+                st.session_state.logged_in = True
+                st.session_state.current_user = email
+                if name:
+                    st.session_state.full_name = name
+    except Exception:
+        pass
+
+
+# =====================================================
+# LOGIN AND REGISTRATION GATE
 # =====================================================
 if not st.session_state.logged_in:
 
     st.title("🔐 Customer Access Portal")
     st.caption("Early Awareness. Better Health. Brighter Future")
 
-    login_tab, register_tab = st.tabs(
-        ["Login", "Sign Up / Register"]
-    )
+    login_tab, register_tab = st.tabs(["Login", "Sign Up / Register"])
 
     with login_tab:
-
         with st.form("login_form"):
-
-            username_input = st.text_input(
-                "Username",
-                key="login_username"
-            )
-
-            password_input = st.text_input(
-                "Password",
-                type="password",
-                key="login_password"
-            )
-
-            login_button = st.form_submit_button(
-                "Login"
-            )
+            username_input = st.text_input("Username", key="login_username")
+            password_input = st.text_input("Password", type="password", key="login_password")
+            remember_me = st.checkbox("Remember me for 7 days", value=True)
+            login_button = st.form_submit_button("Login")
 
             if login_button:
-
                 username_input = username_input.strip()
                 password_hash = hash_password(password_input)
 
                 if (
                     username_input in st.session_state.users
-                    and
-                    st.session_state.users[username_input]
-                    == password_hash
+                    and st.session_state.users[username_input] == password_hash
                 ):
                     st.session_state.logged_in = True
                     st.session_state.current_user = username_input
+                    if remember_me:
+                        set_remember_cookie(username_input, days=7)
+                    st.success("Login successful.")
                     st.rerun()
-
                 else:
                     st.error("Incorrect username or password.")
 
+        st.divider()
+        st.write("Or continue with Google")
+
+        # Native Streamlit Google login button (uses secrets [auth])
+        google_supported = hasattr(st, "login")
+        if google_supported:
+            try:
+                st.login("google")
+                st.caption("After Google approval, the app will sign you in automatically.")
+            except Exception as e:
+                st.warning(
+                    "Google login is not fully configured yet. "
+                    "Check Streamlit secrets [auth] and Google redirect URI."
+                )
+                st.caption(str(e))
+        else:
+            st.info(
+                "This Streamlit version may not support st.login(). "
+                "Upgrade Streamlit or use username/password login."
+            )
+
     with register_tab:
-
         with st.form("register_form"):
-
-            new_username = st.text_input(
-                "Choose a username",
-                key="register_username"
-            )
-
-            new_password = st.text_input(
-                "Choose a password",
-                type="password",
-                key="register_password"
-            )
-
-            confirm_password = st.text_input(
-                "Confirm password",
-                type="password",
-                key="confirm_password"
-            )
-
-            register_button = st.form_submit_button(
-                "Create Account"
-            )
+            new_username = st.text_input("Choose a username", key="register_username")
+            new_password = st.text_input("Choose a password", type="password", key="register_password")
+            confirm_password = st.text_input("Confirm password", type="password", key="confirm_password")
+            register_button = st.form_submit_button("Create Account")
 
             if register_button:
-
                 new_username = new_username.strip()
 
                 if not new_username or not new_password:
                     st.error("Please complete all fields.")
-
                 elif len(new_username) < 3:
-                    st.error(
-                        "Username must contain at least 3 characters."
-                    )
-
+                    st.error("Username must contain at least 3 characters.")
                 elif len(new_password) < 6:
-                    st.error(
-                        "Password must contain at least 6 characters."
-                    )
-
+                    st.error("Password must contain at least 6 characters.")
                 elif new_password != confirm_password:
                     st.error("Passwords do not match.")
-
                 elif new_username in st.session_state.users:
                     st.error("Username already exists.")
-
                 else:
-
-                    st.session_state.users[new_username] = hash_password(
-                        new_password
-                    )
-
+                    st.session_state.users[new_username] = hash_password(new_password)
                     save_users(st.session_state.users)
+                    st.success("Account created successfully. You can now log in.")
 
-                    st.success(
-                        "Account created successfully. You can now log in."
-                    )
-
-    st.info(
-        "Demo account: username `demo`, password `password`."
-    )
-
+    st.info("Demo account: username `demo`, password `password`.")
     st.warning(
-        "This is a portfolio authentication demo. "
-        "Do not use it for real customer or medical data."
+        "Portfolio authentication demo only. Do not use real medical or sensitive customer data."
     )
-
     st.stop()
 
 
@@ -286,48 +288,32 @@ if not st.session_state.logged_in:
 # SIDEBAR
 # =====================================================
 with st.sidebar:
-
     st.title("CancerGuard AI")
-
-    st.write(
-        f"Logged in as: {st.session_state.current_user}"
-    )
-
+    st.write(f"Logged in as: {st.session_state.current_user}")
     st.divider()
-
     st.caption("Your health awareness companion")
-
     st.divider()
-
     st.subheader("Quick Statistics")
-
-    st.metric(
-        "Awareness Score",
-        f"{st.session_state.awareness_score}/100"
-    )
-
-    st.metric(
-        "Water Intake",
-        f"{st.session_state.water}/8 glasses"
-    )
-
-    st.metric(
-        "Exercise",
-        f"{st.session_state.exercise} minutes"
-    )
-
+    st.metric("Awareness Score", f"{st.session_state.awareness_score}/100")
+    st.metric("Water Intake", f"{st.session_state.water}/8 glasses")
+    st.metric("Exercise", f"{st.session_state.exercise} minutes")
     st.divider()
-
     st.caption("Built by Toluwalope")
-
     st.divider()
 
-    if st.button(
-        "Logout",
-        width="stretch"
-    ):
+    if st.button("Logout", width="stretch"):
+        # Clear local session
         st.session_state.logged_in = False
         st.session_state.current_user = None
+        clear_remember_cookie()
+
+        # Clear Streamlit Google session if available
+        try:
+            if hasattr(st, "logout"):
+                st.logout()
+        except Exception:
+            pass
+
         st.rerun()
 
 
@@ -343,16 +329,12 @@ st.warning(
 )
 
 st.title("CancerGuard AI")
-
-st.subheader(
-    "Turning Cancer Data Into Prevention, Awareness and Early Action"
-)
-
+st.subheader("Turning Cancer Data Into Prevention, Awareness and Early Action")
 st.image(
     "https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=1000&q=80",
-    caption="Medical research and health education"
+    caption="Medical research and health education",
+    width="stretch"
 )
-
 st.caption(
     "CancerGuard AI makes cancer-related information easier to understand and explore."
 )
@@ -388,17 +370,9 @@ st.caption(
 # DASHBOARD
 # =====================================================
 with tab_home:
-
     st.title("Your Health Dashboard")
-
-    st.subheader(
-        f"Welcome back, {st.session_state.current_user}"
-    )
-
-    st.write(
-        "Track your healthy habits and improve your health awareness."
-    )
-
+    st.subheader(f"Welcome back, {st.session_state.current_user}")
+    st.write("Track your healthy habits and improve your health awareness.")
     st.divider()
 
     completed_habits = sum(
@@ -412,35 +386,17 @@ with tab_home:
     )
 
     col1, col2, col3, col4 = st.columns(4)
-
     with col1:
-        st.metric(
-            "Awareness Score",
-            f"{st.session_state.awareness_score}/100"
-        )
-
+        st.metric("Awareness Score", f"{st.session_state.awareness_score}/100")
     with col2:
-        st.metric(
-            "Water Intake",
-            f"{st.session_state.water} glasses"
-        )
-
+        st.metric("Water Intake", f"{st.session_state.water} glasses")
     with col3:
-        st.metric(
-            "Exercise",
-            f"{st.session_state.exercise} minutes"
-        )
-
+        st.metric("Exercise", f"{st.session_state.exercise} minutes")
     with col4:
-        st.metric(
-            "Sleep",
-            f"{st.session_state.sleep} hours"
-        )
+        st.metric("Sleep", f"{st.session_state.sleep} hours")
 
     st.divider()
-
     st.subheader("Today's Health Tip")
-
     st.success(
         "Avoid tobacco, stay physically active, maintain a balanced diet, "
         "protect your skin from excessive ultraviolet exposure, and follow "
@@ -448,9 +404,7 @@ with tab_home:
     )
 
     st.divider()
-
     st.subheader("Daily Motivation")
-
     quotes = [
         "Small steps every day lead to big changes.",
         "Your health is an investment, not an expense.",
@@ -460,52 +414,26 @@ with tab_home:
         "Progress is more important than perfection.",
         "A healthy lifestyle is built one habit at a time."
     ]
-
     if st.session_state.daily_quote is None:
         st.session_state.daily_quote = random.choice(quotes)
-
-    st.info(
-        st.session_state.daily_quote
-    )
-
+    st.info(st.session_state.daily_quote)
     if st.button("New Quote"):
-
-        st.session_state.daily_quote = random.choice(
-            quotes
-        )
-
+        st.session_state.daily_quote = random.choice(quotes)
         st.rerun()
 
     st.divider()
-
     st.subheader("Healthy Living Progress")
-
     progress_data = pd.DataFrame(
         {
-            "Habit": [
-                "Water",
-                "Exercise",
-                "Sleep",
-                "Daily Habits"
-            ],
+            "Habit": ["Water", "Exercise", "Sleep", "Daily Habits"],
             "Progress": [
-                min(
-                    st.session_state.water / 8 * 100,
-                    100
-                ),
-                min(
-                    st.session_state.exercise / 30 * 100,
-                    100
-                ),
-                min(
-                    st.session_state.sleep / 7 * 100,
-                    100
-                ),
+                min(st.session_state.water / 8 * 100, 100),
+                min(st.session_state.exercise / 30 * 100, 100),
+                min(st.session_state.sleep / 7 * 100, 100),
                 completed_habits / 5 * 100
             ]
         }
     )
-
     progress_chart = px.bar(
         progress_data,
         x="Habit",
@@ -514,44 +442,24 @@ with tab_home:
         color="Habit",
         title="Today's Healthy Living Progress"
     )
-
-    st.plotly_chart(
-        progress_chart,
-        width="stretch"
-    )
+    st.plotly_chart(progress_chart, width="stretch")
 
 
 # =====================================================
 # PREVENTION
 # =====================================================
 with tab_prevention:
-
     st.title("Prevention Awareness")
-
-    st.write(
-        "This calculator provides a general educational awareness profile."
-    )
-
-    st.warning(
-        "This is not a validated medical risk calculator and does not diagnose cancer."
-    )
-
+    st.write("This calculator provides a general educational awareness profile.")
+    st.warning("This is not a validated medical risk calculator and does not diagnose cancer.")
     st.divider()
 
     st.subheader("Personalize Your Content")
-
     demographic_choice = st.selectbox(
         "Select a content group",
-        [
-            "Prefer not to say",
-            "Woman",
-            "Man",
-            "Youth or Young Adult",
-            "Older Adult"
-        ],
+        ["Prefer not to say", "Woman", "Man", "Youth or Young Adult", "Older Adult"],
         key="demographic_choice"
     )
-
     st.session_state.demo_group = demographic_choice
 
     demographic_tips = {
@@ -580,188 +488,102 @@ with tab_prevention:
             "Ask a caregiver or family member to support appointment tracking if useful."
         ]
     }
-
     if demographic_choice in demographic_tips:
-
-        st.write(
-            f"Information for: {demographic_choice}"
-        )
-
+        st.write(f"Information for: {demographic_choice}")
         for tip in demographic_tips[demographic_choice]:
             st.write("-", tip)
 
     st.divider()
-
     st.subheader("Basic Awareness Questionnaire")
-
     col1, col2 = st.columns(2)
-
     with col1:
-
-        basic_age = st.slider(
-            "Age",
-            18,
-            100,
-            40,
-            key="basic_age"
-        )
-
+        basic_age = st.slider("Age", 18, 100, 40, key="basic_age")
         basic_smoking = st.selectbox(
             "Smoking status",
-            [
-                "Never smoked",
-                "Former smoker",
-                "Current smoker"
-            ],
+            ["Never smoked", "Former smoker", "Current smoker"],
             key="basic_smoking"
         )
-
         basic_family_history = st.selectbox(
             "Family history",
-            [
-                "No close family history",
-                "Second-degree relative",
-                "First-degree relative"
-            ],
+            ["No close family history", "Second-degree relative", "First-degree relative"],
             key="basic_family_history"
         )
-
         basic_screening = st.selectbox(
             "Screening status",
-            [
-                "Up to date",
-                "Sometimes",
-                "Not up to date or unsure"
-            ],
+            ["Up to date", "Sometimes", "Not up to date or unsure"],
             key="basic_screening"
         )
-
     with col2:
-
         basic_alcohol = st.selectbox(
             "Alcohol use",
-            [
-                "None or rare",
-                "Light",
-                "Moderate",
-                "Heavy"
-            ],
+            ["None or rare", "Light", "Moderate", "Heavy"],
             key="basic_alcohol"
         )
-
         basic_sun = st.selectbox(
             "Unprotected sun exposure",
-            [
-                "Rarely",
-                "Sometimes",
-                "Often"
-            ],
+            ["Rarely", "Sometimes", "Often"],
             key="basic_sun"
         )
-
         basic_diet = st.selectbox(
             "Diet quality",
-            [
-                "Mostly whole foods and plants",
-                "Average or mixed",
-                "High processed foods"
-            ],
+            ["Mostly whole foods and plants", "Average or mixed", "High processed foods"],
             key="basic_diet"
         )
-
         basic_exercise = st.selectbox(
             "Weekly exercise",
-            [
-                "Active, 150 or more minutes",
-                "Some activity",
-                "Mostly sedentary"
-            ],
+            ["Active, 150 or more minutes", "Some activity", "Mostly sedentary"],
             key="basic_exercise"
         )
 
     awareness_points = 0
-
     if basic_age > 60:
         awareness_points += 20
     elif basic_age > 45:
         awareness_points += 12
-
     if basic_smoking == "Current smoker":
         awareness_points += 22
     elif basic_smoking == "Former smoker":
         awareness_points += 8
-
     if basic_family_history == "First-degree relative":
         awareness_points += 18
     elif basic_family_history == "Second-degree relative":
         awareness_points += 8
-
     if basic_alcohol == "Heavy":
         awareness_points += 14
     elif basic_alcohol == "Moderate":
         awareness_points += 6
-
     if basic_sun == "Often":
         awareness_points += 12
     elif basic_sun == "Sometimes":
         awareness_points += 5
-
     if basic_screening == "Not up to date or unsure":
         awareness_points += 10
-
     if basic_diet == "High processed foods":
         awareness_points += 10
     elif basic_diet == "Average or mixed":
         awareness_points += 5
-
     if basic_exercise == "Mostly sedentary":
         awareness_points += 10
     elif basic_exercise == "Some activity":
         awareness_points += 4
 
-    awareness_score = min(
-        awareness_points,
-        100
-    )
-
+    awareness_score = min(awareness_points, 100)
     st.session_state.awareness_score = awareness_score
 
     st.divider()
-
-    st.subheader(
-        f"Prevention Awareness Score: {awareness_score}/100"
-    )
-
-    st.progress(
-        awareness_score / 100
-    )
+    st.subheader(f"Prevention Awareness Score: {awareness_score}/100")
+    st.progress(awareness_score / 100)
 
     if awareness_score >= 55:
-
-        st.error(
-            "Several awareness areas may need attention. "
-            "Discuss your questions with a healthcare professional."
-        )
-
+        st.error("Several awareness areas may need attention. Discuss your questions with a healthcare professional.")
     elif awareness_score >= 30:
-
-        st.warning(
-            "Some awareness areas may benefit from improvement. "
-            "Review them with a healthcare professional."
-        )
-
+        st.warning("Some awareness areas may benefit from improvement. Review them with a healthcare professional.")
     else:
-
-        st.success(
-            "Your answers show fewer flagged awareness areas. "
-            "Continue healthy habits and follow appropriate screening advice."
-        )
+        st.success("Your answers show fewer flagged awareness areas. Continue healthy habits and follow appropriate screening advice.")
 
     st.divider()
-
     st.subheader("General Prevention Information")
-
-    prevention_tips = [
+    for tip in [
         "Avoid tobacco products.",
         "Maintain regular physical activity.",
         "Eat a balanced diet containing vegetables, fruit and whole grains.",
@@ -769,121 +591,60 @@ with tab_prevention:
         "Protect your skin from excessive ultraviolet exposure.",
         "Ask a healthcare professional about appropriate screening.",
         "Ask a healthcare professional about HPV and hepatitis B vaccination."
-    ]
-
-    for prevention_tip in prevention_tips:
-        st.write("-", prevention_tip)
+    ]:
+        st.write("-", tip)
 
     st.divider()
-
     st.subheader("Advanced Awareness Questionnaire")
-
     with st.form("advanced_awareness_form"):
-
         advanced_col1, advanced_col2, advanced_col3 = st.columns(3)
-
         with advanced_col1:
-
-            advanced_age = st.slider(
-                "Age",
-                18,
-                90,
-                35,
-                key="advanced_age"
-            )
-
+            advanced_age = st.slider("Age", 18, 90, 35, key="advanced_age")
             advanced_smoking = st.selectbox(
                 "Smoking",
-                [
-                    "Never",
-                    "Former smoker",
-                    "Current smoker"
-                ],
+                ["Never", "Former smoker", "Current smoker"],
                 key="advanced_smoking"
             )
-
             advanced_family = st.selectbox(
                 "Family history",
-                [
-                    "None",
-                    "Second-degree relative",
-                    "First-degree relative"
-                ],
+                ["None", "Second-degree relative", "First-degree relative"],
                 key="advanced_family"
             )
-
         with advanced_col2:
-
             advanced_alcohol = st.selectbox(
                 "Alcohol per week",
-                [
-                    "None",
-                    "1 to 7",
-                    "8 to 14",
-                    "15 or more"
-                ],
+                ["None", "1 to 7", "8 to 14", "15 or more"],
                 key="advanced_alcohol"
             )
-
             advanced_weight = st.selectbox(
                 "Self-estimated weight category",
-                [
-                    "Normal",
-                    "Overweight",
-                    "Obese"
-                ],
+                ["Normal", "Overweight", "Obese"],
                 key="advanced_weight"
             )
-
             advanced_fruit_vegetables = st.selectbox(
                 "Fruit and vegetables per day",
-                [
-                    "5 or more",
-                    "2 to 4",
-                    "Less than 2"
-                ],
+                ["5 or more", "2 to 4", "Less than 2"],
                 key="advanced_fruit_vegetables"
             )
-
         with advanced_col3:
-
             advanced_meat = st.selectbox(
                 "Processed meat",
-                [
-                    "Rarely or never",
-                    "1 to 2 times per week",
-                    "3 to 5 times per week",
-                    "Most days"
-                ],
+                ["Rarely or never", "1 to 2 times per week", "3 to 5 times per week", "Most days"],
                 key="advanced_meat"
             )
-
             advanced_sun = st.selectbox(
                 "Sun protection",
-                [
-                    "Always",
-                    "Sometimes",
-                    "Rarely"
-                ],
+                ["Always", "Sometimes", "Rarely"],
                 key="advanced_sun"
             )
-
             advanced_screening = st.selectbox(
                 "Screening",
-                [
-                    "Up to date",
-                    "Partially up to date",
-                    "Not up to date"
-                ],
+                ["Up to date", "Partially up to date", "Not up to date"],
                 key="advanced_screening"
             )
-
-        advanced_submit = st.form_submit_button(
-            "Generate Advanced Profile"
-        )
+        advanced_submit = st.form_submit_button("Generate Advanced Profile")
 
     if advanced_submit:
-
         advanced_points = 0
         flagged_factors = []
 
@@ -944,191 +705,85 @@ with tab_prevention:
             advanced_points += 12
             flagged_factors.append("Screening gap")
 
-        advanced_score = min(
-            advanced_points,
-            100
-        )
-
+        advanced_score = min(advanced_points, 100)
         st.session_state.awareness_score = advanced_score
+        st.session_state.score_history.append(advanced_score)
 
-        st.session_state.score_history.append(
-            advanced_score
-        )
-
-        st.subheader(
-            f"Advanced Awareness Profile: {advanced_score}/100"
-        )
-
-        st.progress(
-            advanced_score / 100
-        )
+        st.subheader(f"Advanced Awareness Profile: {advanced_score}/100")
+        st.progress(advanced_score / 100)
 
         if advanced_score >= 50:
-
-            st.error(
-                "Several factors were flagged. "
-                "Discuss them with a healthcare professional."
-            )
-
+            st.error("Several factors were flagged. Discuss them with a healthcare professional.")
         elif advanced_score >= 25:
-
-            st.warning(
-                "Some factors were flagged. "
-                "Consider discussing them with a healthcare professional."
-            )
-
+            st.warning("Some factors were flagged. Consider discussing them with a healthcare professional.")
         else:
-
-            st.success(
-                "Fewer factors were flagged based on your answers. "
-                "Continue healthy habits and screening discussions."
-            )
+            st.success("Fewer factors were flagged based on your answers. Continue healthy habits and screening discussions.")
 
         if flagged_factors:
-
-            st.write(
-                "Factors flagged:",
-                ", ".join(flagged_factors)
-            )
-
+            st.write("Factors flagged:", ", ".join(flagged_factors))
         else:
-
-            st.write(
-                "No major factors were flagged by this educational questionnaire."
-            )
+            st.write("No major factors were flagged by this educational questionnaire.")
 
         st.subheader("Suggested Actions")
-
-        suggested_actions = [
+        for action in [
             "Discuss appropriate screening with a qualified healthcare professional.",
             "Maintain regular physical activity.",
             "Avoid tobacco products.",
             "Eat a balanced diet.",
             "Protect your skin from ultraviolet exposure."
-        ]
-
-        for action in suggested_actions:
+        ]:
             st.write("-", action)
 
-        st.warning(
-            "This result is educational only. "
-            "It does not predict cancer or replace medical advice."
-        )
+        st.warning("This result is educational only. It does not predict cancer or replace medical advice.")
 
 
 # =====================================================
 # HEALTHY LIVING
 # =====================================================
 with tab_lifestyle:
-
     st.title("Healthy Living")
-
     st.image(
         "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1000&q=80",
-        caption="Small daily habits support a healthy lifestyle"
+        caption="Small daily habits support a healthy lifestyle",
+        width="stretch"
     )
-
-    st.write(
-        "Track simple daily habits that support general health."
-    )
-
+    st.write("Track simple daily habits that support general health.")
     st.divider()
 
     st.subheader("Water Intake")
-
-    st.slider(
-        "Glasses of water today",
-        min_value=0,
-        max_value=15,
-        key="water"
-    )
-
+    st.slider("Glasses of water today", min_value=0, max_value=15, key="water")
     water_value = st.session_state.water
-
-    st.progress(
-        min(water_value / 15, 1.0)
-    )
-
+    st.progress(min(water_value / 15, 1.0))
     if water_value >= 8:
         st.success("You reached the water target.")
     else:
-        st.info(
-            f"{8 - water_value} more glasses to reach the target."
-        )
+        st.info(f"{8 - water_value} more glasses to reach the target.")
 
     st.divider()
-
     st.subheader("Exercise")
-
-    st.slider(
-        "Minutes of exercise today",
-        min_value=0,
-        max_value=180,
-        key="exercise"
-    )
-
+    st.slider("Minutes of exercise today", min_value=0, max_value=180, key="exercise")
     exercise_value = st.session_state.exercise
-
     if exercise_value >= 30:
-        st.success(
-            "You completed at least 30 minutes of activity."
-        )
+        st.success("You completed at least 30 minutes of activity.")
     else:
-        st.info(
-            f"{30 - exercise_value} more minutes to reach today's target."
-        )
+        st.info(f"{30 - exercise_value} more minutes to reach today's target.")
 
     st.divider()
-
     st.subheader("Sleep")
-
-    st.slider(
-        "Hours of sleep last night",
-        min_value=0.0,
-        max_value=12.0,
-        step=0.5,
-        key="sleep"
-    )
-
+    st.slider("Hours of sleep last night", min_value=0.0, max_value=12.0, step=0.5, key="sleep")
     sleep_value = st.session_state.sleep
-
     if sleep_value >= 7:
-        st.success(
-            "Your sleep duration meets the general target."
-        )
+        st.success("Your sleep duration meets the general target.")
     else:
-        st.warning(
-            "Consider improving your sleep routine."
-        )
+        st.warning("Consider improving your sleep routine.")
 
     st.divider()
-
     st.subheader("Daily Healthy Habits")
-
-    st.checkbox(
-        "Ate fruits and vegetables",
-        key="habit_diet"
-    )
-
-    st.checkbox(
-        "Avoided tobacco",
-        key="habit_tobacco"
-    )
-
-    st.checkbox(
-        "Completed physical activity",
-        key="habit_activity"
-    )
-
-    st.checkbox(
-        "Protected myself from excessive sun exposure",
-        key="habit_sun"
-    )
-
-    st.checkbox(
-        "Stayed up to date with health checks",
-        key="habit_screening"
-    )
+    st.checkbox("Ate fruits and vegetables", key="habit_diet")
+    st.checkbox("Avoided tobacco", key="habit_tobacco")
+    st.checkbox("Completed physical activity", key="habit_activity")
+    st.checkbox("Protected myself from excessive sun exposure", key="habit_sun")
+    st.checkbox("Stayed up to date with health checks", key="habit_screening")
 
     daily_habit_total = sum(
         [
@@ -1139,28 +794,18 @@ with tab_lifestyle:
             st.session_state.habit_screening
         ]
     )
-
-    st.write(
-        f"Daily Habit Score: {daily_habit_total}/5"
-    )
-
-    st.progress(
-        daily_habit_total / 5
-    )
-
+    st.write(f"Daily Habit Score: {daily_habit_total}/5")
+    st.progress(daily_habit_total / 5)
     if daily_habit_total == 5:
-        st.success(
-            "You completed all your daily habits."
-        )
+        st.success("You completed all your daily habits.")
+        st.balloons()
 
 
 # =====================================================
 # GOALS AND PROGRESS
 # =====================================================
 with tab_goals:
-
     st.title("Prevention Goals and Progress")
-
     goal_options = [
         "Exercise for 30 minutes",
         "Eat more vegetables",
@@ -1172,127 +817,56 @@ with tab_goals:
     ]
 
     st.subheader("Add Goals")
-
-    selected_goals = st.multiselect(
-        "Choose goals",
-        goal_options,
-        key="selected_goals"
-    )
-
-    custom_goal = st.text_input(
-        "Add a custom goal",
-        key="custom_goal"
-    )
+    selected_goals = st.multiselect("Choose goals", goal_options, key="selected_goals")
+    custom_goal = st.text_input("Add a custom goal", key="custom_goal")
 
     if st.button("Add Selected Goals"):
-
-        existing_goal_names = [
-            item["goal"]
-            for item in st.session_state.goals
-        ]
-
+        existing_goal_names = [item["goal"] for item in st.session_state.goals]
         for selected_goal in selected_goals:
-
             if selected_goal not in existing_goal_names:
-
-                st.session_state.goals.append(
-                    {
-                        "goal": selected_goal,
-                        "done": False
-                    }
-                )
-
+                st.session_state.goals.append({"goal": selected_goal, "done": False})
         if custom_goal.strip():
-
-            st.session_state.goals.append(
-                {
-                    "goal": custom_goal.strip(),
-                    "done": False
-                }
-            )
-
+            st.session_state.goals.append({"goal": custom_goal.strip(), "done": False})
         st.success("Goals added.")
         st.rerun()
 
     st.divider()
-
     st.subheader("Active Goals")
-
     if not st.session_state.goals:
-
-        st.info(
-            "You have not added any goals yet."
-        )
-
+        st.info("You have not added any goals yet.")
     else:
-
         completed_goal_count = 0
-
-        for index, goal_item in enumerate(
-            st.session_state.goals
-        ):
-
+        for index, goal_item in enumerate(st.session_state.goals):
             goal_status = st.checkbox(
                 goal_item["goal"],
                 value=goal_item["done"],
                 key=f"goal_status_{index}"
             )
-
             st.session_state.goals[index]["done"] = goal_status
-
             if goal_status:
                 completed_goal_count += 1
 
-        total_goals = len(
-            st.session_state.goals
-        )
-
-        goal_progress = (
-            completed_goal_count / total_goals
-        )
-
-        st.progress(goal_progress)
-
-        st.write(
-            f"{completed_goal_count} of "
-            f"{total_goals} goals completed."
-        )
-
+        total_goals = len(st.session_state.goals)
+        st.progress(completed_goal_count / total_goals)
+        st.write(f"{completed_goal_count} of {total_goals} goals completed.")
         if completed_goal_count == total_goals:
-            st.success(
-                "All goals completed."
-            )
-
+            st.success("All goals completed.")
+            st.balloons()
         if st.button("Clear All Goals"):
-
             st.session_state.goals = []
             st.rerun()
 
     st.divider()
-
     st.subheader("Awareness Score History")
-
     if not st.session_state.score_history:
-
-        st.info(
-            "Complete the advanced questionnaire "
-            "to create a score history."
-        )
-
+        st.info("Complete the advanced questionnaire to create a score history.")
     else:
-
         history_data = pd.DataFrame(
             {
-                "Attempt": range(
-                    1,
-                    len(
-                        st.session_state.score_history
-                    ) + 1
-                ),
+                "Attempt": range(1, len(st.session_state.score_history) + 1),
                 "Score": st.session_state.score_history
             }
         )
-
         history_chart = px.line(
             history_data,
             x="Attempt",
@@ -1301,104 +875,53 @@ with tab_goals:
             range_y=[0, 100],
             title="Awareness Score Trend"
         )
-
-        st.plotly_chart(
-            history_chart,
-            width="stretch"
-        )
+        st.plotly_chart(history_chart, width="stretch")
 
 
 # =====================================================
 # WEEKLY CHALLENGE
 # =====================================================
 with tab_challenge:
-
     st.title("Weekly Prevention Challenge")
-
     challenge_list = {
-        1: (
-            "Healthy Food Challenge",
-            "Add one extra serving of vegetables to your meals this week."
-        ),
-        2: (
-            "Movement Challenge",
-            "Take a ten-minute walk each day this week."
-        ),
-        3: (
-            "Sun Protection Challenge",
-            "Use shade, protective clothing or sunscreen when outdoors."
-        ),
-        4: (
-            "Hydration Challenge",
-            "Work toward your daily water target."
-        ),
-        5: (
-            "Screening Awareness Challenge",
-            "Learn which screenings may be appropriate for your age group."
-        )
+        1: ("Healthy Food Challenge", "Add one extra serving of vegetables to your meals this week."),
+        2: ("Movement Challenge", "Take a ten-minute walk each day this week."),
+        3: ("Sun Protection Challenge", "Use shade, protective clothing or sunscreen when outdoors."),
+        4: ("Hydration Challenge", "Work toward your daily water target."),
+        5: ("Screening Awareness Challenge", "Learn which screenings may be appropriate for your age group.")
     }
-
-    current_challenge_number = (
-        (
-            st.session_state.challenge_week - 1
-        )
-        % len(challenge_list)
-    ) + 1
-
-    challenge_title, challenge_description = challenge_list[
-        current_challenge_number
-    ]
-
-    st.subheader(
-        f"Week {current_challenge_number}: {challenge_title}"
-    )
-
-    st.write(
-        challenge_description
-    )
+    current_challenge_number = ((st.session_state.challenge_week - 1) % len(challenge_list)) + 1
+    challenge_title, challenge_description = challenge_list[current_challenge_number]
+    st.subheader(f"Week {current_challenge_number}: {challenge_title}")
+    st.write(challenge_description)
 
     if not st.session_state.challenge_done:
-
         if st.button("Mark Challenge Complete"):
-
             st.session_state.challenge_done = True
             st.success("Challenge completed.")
-
+            st.balloons()
     else:
-
-        st.success(
-            "This challenge is complete."
-        )
-
+        st.success("This challenge is complete.")
         if st.button("Start Next Challenge"):
-
             st.session_state.challenge_week += 1
             st.session_state.challenge_done = False
             st.rerun()
 
     st.divider()
-
-    st.write(
-        f"Challenges completed: "
-        f"{st.session_state.challenge_week - 1}"
-    )
+    st.write(f"Challenges completed: {st.session_state.challenge_week - 1}")
 
 
 # =====================================================
 # LEARN AND QUIZ
 # =====================================================
 with tab_learn:
-
     st.title("Cancer Awareness and Education")
-
     st.image(
         "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=1000&q=80",
-        caption="Health education supports informed decisions"
+        caption="Health education supports informed decisions",
+        width="stretch"
     )
-
-    st.write(
-        "Explore general educational information about cancer prevention."
-    )
+    st.write("Explore general educational information about cancer prevention.")
 
     education_topics = {
         "Cancer Awareness": (
@@ -1431,90 +954,43 @@ with tab_learn:
             "family history and personal health history."
         )
     }
-
     for topic_name, topic_content in education_topics.items():
-
         with st.expander(topic_name):
             st.write(topic_content)
 
     st.divider()
-
     st.subheader("General Body Awareness Guide")
-
     body_area = st.selectbox(
         "Select an area",
-        [
-            "Select an area",
-            "Skin",
-            "Breast or Chest",
-            "Digestive System",
-            "Respiratory System",
-            "General"
-        ],
+        ["Select an area", "Skin", "Breast or Chest", "Digestive System", "Respiratory System", "General"],
         key="body_area"
     )
-
     body_information = {
-        "Skin": (
-            "Be aware of new or changing moles and sores that do not heal. "
-            "Contact a healthcare professional about concerning changes."
-        ),
-        "Breast or Chest": (
-            "Be aware of unusual lumps, skin changes or other persistent changes. "
-            "Discuss concerns and screening with a healthcare professional."
-        ),
-        "Digestive System": (
-            "Persistent bowel changes, blood in stool or unexplained weight loss "
-            "should be discussed with a healthcare professional."
-        ),
-        "Respiratory System": (
-            "A persistent cough, chest pain or breathing difficulty should be "
-            "discussed with a healthcare professional."
-        ),
-        "General": (
-            "Persistent unexplained symptoms should be discussed with a qualified "
-            "healthcare professional."
-        )
+        "Skin": "Be aware of new or changing moles and sores that do not heal. Contact a healthcare professional about concerning changes.",
+        "Breast or Chest": "Be aware of unusual lumps, skin changes or other persistent changes. Discuss concerns and screening with a healthcare professional.",
+        "Digestive System": "Persistent bowel changes, blood in stool or unexplained weight loss should be discussed with a healthcare professional.",
+        "Respiratory System": "A persistent cough, chest pain or breathing difficulty should be discussed with a healthcare professional.",
+        "General": "Persistent unexplained symptoms should be discussed with a qualified healthcare professional."
     }
-
     if body_area != "Select an area":
-        st.info(
-            body_information[body_area]
-        )
+        st.info(body_information[body_area])
 
     st.divider()
-
     st.subheader("Knowledge Quiz")
-
     quiz_questions = [
         {
             "question": "Which habit can reduce the risk of several cancers?",
-            "options": [
-                "Using tobacco",
-                "Regular physical activity",
-                "Using tanning beds",
-                "Avoiding all screening"
-            ],
+            "options": ["Using tobacco", "Regular physical activity", "Using tanning beds", "Avoiding all screening"],
             "answer": "Regular physical activity"
         },
         {
             "question": "What does the HPV vaccine help prevent?",
-            "options": [
-                "Some HPV-related cancers",
-                "All cancers",
-                "All infections",
-                "Broken bones"
-            ],
+            "options": ["Some HPV-related cancers", "All cancers", "All infections", "Broken bones"],
             "answer": "Some HPV-related cancers"
         },
         {
             "question": "What is a useful sun protection strategy?",
-            "options": [
-                "Tanning regularly",
-                "Using shade and protective clothing",
-                "Avoiding water",
-                "Using sunscreen only after sunburn"
-            ],
+            "options": ["Tanning regularly", "Using shade and protective clothing", "Avoiding water", "Using sunscreen only after sunburn"],
             "answer": "Using shade and protective clothing"
         },
         {
@@ -1525,63 +1001,30 @@ with tab_learn:
                 "Screening is never needed",
                 "It has no relevance"
             ],
-            "answer": (
-                "It may be useful to discuss screening with a doctor"
-            )
+            "answer": "It may be useful to discuss screening with a doctor"
         }
     ]
 
     with st.form("knowledge_quiz_form"):
-
         quiz_answers = []
-
-        for question_number, question in enumerate(
-            quiz_questions
-        ):
-
-            st.write(
-                f"Question {question_number + 1}: "
-                f"{question['question']}"
-            )
-
+        for question_number, question in enumerate(quiz_questions):
+            st.write(f"Question {question_number + 1}: {question['question']}")
             selected_answer = st.radio(
                 "Choose one answer",
                 question["options"],
                 key=f"quiz_question_{question_number}"
             )
-
             quiz_answers.append(selected_answer)
-
-        quiz_submit = st.form_submit_button(
-            "Submit Quiz"
-        )
+        quiz_submit = st.form_submit_button("Submit Quiz")
 
     if quiz_submit:
-
         quiz_score = 0
-
-        for question_number, question in enumerate(
-            quiz_questions
-        ):
-
-            if (
-                quiz_answers[question_number]
-                == question["answer"]
-            ):
+        for question_number, question in enumerate(quiz_questions):
+            if quiz_answers[question_number] == question["answer"]:
                 quiz_score += 1
-
-        quiz_percentage = (
-            quiz_score / len(quiz_questions)
-        )
-
-        st.subheader(
-            f"Quiz Score: {quiz_score}/"
-            f"{len(quiz_questions)}"
-        )
-
-        st.progress(
-            quiz_percentage
-        )
+        quiz_percentage = quiz_score / len(quiz_questions)
+        st.subheader(f"Quiz Score: {quiz_score}/{len(quiz_questions)}")
+        st.progress(quiz_percentage)
 
         if quiz_percentage == 1:
             badge = "Gold: Prevention Expert"
@@ -1592,36 +1035,26 @@ with tab_learn:
 
         if badge not in st.session_state.badges:
             st.session_state.badges.append(badge)
-
-        st.success(
-            f"Achievement earned: {badge}"
-        )
+        st.success(f"Achievement earned: {badge}")
+        if quiz_percentage == 1:
+            st.balloons()
 
         st.subheader("Correct Answers")
-
         for question in quiz_questions:
-
-            st.write(
-                f"Question: {question['question']}"
-            )
-
-            st.write(
-                f"Correct answer: {question['answer']}"
-            )
+            st.write(f"Question: {question['question']}")
+            st.write(f"Correct answer: {question['answer']}")
 
 
 # =====================================================
 # MACHINE LEARNING RESEARCH
 # =====================================================
 with tab_research:
-
     st.title("Educational ML Research Lab")
-
     st.image(
         "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=1000&q=80",
-        caption="Data-driven health education"
+        caption="Data-driven health education",
+        width="stretch"
     )
-
     st.info(
         """
         This section demonstrates machine learning using the public
@@ -1632,88 +1065,42 @@ with tab_research:
 
     @st.cache_data
     def load_dataset():
-
         cancer_data = load_breast_cancer()
-
-        dataset = pd.DataFrame(
-            cancer_data.data,
-            columns=cancer_data.feature_names
-        )
-
+        dataset = pd.DataFrame(cancer_data.data, columns=cancer_data.feature_names)
         dataset["diagnosis"] = cancer_data.target
-
         return dataset
 
     cancer_dataset = load_dataset()
-
     st.write(
-        f"Dataset size: {cancer_dataset.shape[0]} samples "
-        f"and {cancer_dataset.shape[1] - 1} features."
+        f"Dataset size: {cancer_dataset.shape[0]} samples and {cancer_dataset.shape[1] - 1} features."
     )
+    st.dataframe(cancer_dataset.head())
 
-    st.dataframe(
-        cancer_dataset.head()
-    )
-
-    features = cancer_dataset.drop(
-        columns=["diagnosis"]
-    )
-
+    features = cancer_dataset.drop(columns=["diagnosis"])
     target = cancer_dataset["diagnosis"]
-
     x_train, x_test, y_train, y_test = train_test_split(
-        features,
-        target,
-        test_size=0.2,
-        random_state=42,
-        stratify=target
+        features, target, test_size=0.2, random_state=42, stratify=target
     )
-
-    research_model = RandomForestClassifier(
-        n_estimators=150,
-        random_state=42
-    )
-
-    research_model.fit(
-        x_train,
-        y_train
-    )
-
-    predictions = research_model.predict(
-        x_test
-    )
-
-    model_accuracy = accuracy_score(
-        y_test,
-        predictions
-    )
+    research_model = RandomForestClassifier(n_estimators=150, random_state=42)
+    research_model.fit(x_train, y_train)
+    predictions = research_model.predict(x_test)
+    model_accuracy = accuracy_score(y_test, predictions)
 
     col1, col2 = st.columns(2)
-
     with col1:
-
-        st.metric(
-            "Test Accuracy",
-            f"{model_accuracy:.2%}"
-        )
-
+        st.metric("Test Accuracy", f"{model_accuracy:.2%}")
     with col2:
-
         st.write("Dataset target meaning:")
         st.write("0 represents malignant.")
         st.write("1 represents benign.")
 
     st.subheader("Important Features")
-
     feature_importance_data = pd.DataFrame(
         {
             "Feature": features.columns,
             "Importance": research_model.feature_importances_
         }
-    ).sort_values(
-        by="Importance",
-        ascending=False
-    ).head(8)
+    ).sort_values(by="Importance", ascending=False).head(8)
 
     importance_chart = px.bar(
         feature_importance_data,
@@ -1723,28 +1110,13 @@ with tab_research:
         color="Importance",
         title="Top Features Used by the Model"
     )
-
-    st.plotly_chart(
-        importance_chart,
-        width="stretch"
-    )
+    st.plotly_chart(importance_chart, width="stretch")
 
     st.subheader("Interactive Learning Example")
-
     selected_feature = "mean radius"
-
-    feature_minimum = float(
-        features[selected_feature].min()
-    )
-
-    feature_maximum = float(
-        features[selected_feature].max()
-    )
-
-    feature_average = float(
-        features[selected_feature].mean()
-    )
-
+    feature_minimum = float(features[selected_feature].min())
+    feature_maximum = float(features[selected_feature].max())
+    feature_average = float(features[selected_feature].mean())
     selected_value = st.slider(
         "Adjust mean radius",
         min_value=feature_minimum,
@@ -1753,68 +1125,32 @@ with tab_research:
         step=0.1,
         key="research_feature_slider"
     )
-
     example_row = features.iloc[[0]].copy()
-
     example_row[selected_feature] = selected_value
-
-    example_prediction = research_model.predict(
-        example_row
-    )
-
-    example_probabilities = research_model.predict_proba(
-        example_row
-    )[0]
+    example_prediction = research_model.predict(example_row)
+    example_probabilities = research_model.predict_proba(example_row)[0]
 
     if example_prediction[0] == 1:
-
         st.success(
-            f"Educational output: benign class. "
-            f"Estimated model probability: "
-            f"{example_probabilities[1]:.1%}"
+            f"Educational output: benign class. Estimated model probability: {example_probabilities[1]:.1%}"
         )
-
     else:
-
         st.error(
-            f"Educational output: malignant class. "
-            f"Estimated model probability: "
-            f"{example_probabilities[0]:.1%}"
+            f"Educational output: malignant class. Estimated model probability: {example_probabilities[0]:.1%}"
         )
-
-    st.warning(
-        "This model output is not a diagnosis and must not be used "
-        "for health decisions."
-    )
+    st.warning("This model output is not a diagnosis and must not be used for health decisions.")
 
 
 # =====================================================
 # PROFILE
 # =====================================================
 with tab_profile:
-
     st.title("My Profile")
-
-    st.success(
-        f"Logged in as: {st.session_state.current_user}"
-    )
-
+    st.success(f"Logged in as: {st.session_state.current_user}")
     st.divider()
-
     st.subheader("Personal Information")
-
-    st.text_input(
-        "Full Name",
-        key="full_name"
-    )
-
-    st.number_input(
-        "Age",
-        min_value=18,
-        max_value=100,
-        key="profile_age"
-    )
-
+    st.text_input("Full Name", key="full_name")
+    st.number_input("Age", min_value=18, max_value=100, key="profile_age")
     st.selectbox(
         "Main Health Goal",
         [
@@ -1827,23 +1163,23 @@ with tab_profile:
         ],
         key="health_goal"
     )
-
     if st.button("Save Profile"):
+        st.success("Profile saved for this session.")
 
-        st.success(
-            "Profile saved for this session."
-        )
+    st.divider()
+    st.subheader("Your Badges")
+    if st.session_state.badges:
+        for badge in st.session_state.badges:
+            st.write("-", badge)
+    else:
+        st.write("No badges yet. Complete the quiz in the Learn tab.")
 
 
 # =====================================================
 # FOOTER
 # =====================================================
 st.divider()
-
-st.caption(
-    "Educational awareness application. Not a medical product."
-)
-
+st.caption("Educational awareness application. Not a medical product.")
 st.markdown(
     """
     <div class="app-footer">
