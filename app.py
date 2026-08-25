@@ -4,14 +4,12 @@ import random
 import json
 import os
 import hashlib
-from datetime import datetime, timedelta
 
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 import plotly.express as px
-import extra_streamlit_components as stx
 
 
 # =====================================================
@@ -55,15 +53,6 @@ st.markdown(
 
 
 # =====================================================
-# COOKIE MANAGER (Remember Me)
-# =====================================================
-def get_cookie_manager():
-    return stx.CookieManager(key="cancerguard_cookie_manager")
-
-cookie_manager = get_cookie_manager()
-
-
-# =====================================================
 # USER ACCOUNT STORAGE
 # =====================================================
 USER_FILE = "users.json"
@@ -96,42 +85,13 @@ def save_users(users):
         json.dump(users, file, indent=4)
 
 
-def set_remember_cookie(username: str, days: int = 7):
-    expiry = datetime.utcnow() + timedelta(days=days)
-    token = f"{username}|{expiry.isoformat()}"
-    cookie_manager.set("cg_session", token, expires_at=expiry)
-
-
-def clear_remember_cookie():
-    cookie_manager.delete("cg_session")
-
-
-def try_auto_login_from_cookie(users_dict) -> bool:
-    """Return True if cookie restored a valid session."""
-    saved = cookie_manager.get("cg_session")
-    if not saved or not isinstance(saved, str) or "|" not in saved:
-        return False
-    try:
-        saved_user, expiry_str = saved.split("|", 1)
-        if datetime.fromisoformat(expiry_str) <= datetime.utcnow():
-            clear_remember_cookie()
-            return False
-        if saved_user in users_dict:
-            st.session_state.logged_in = True
-            st.session_state.current_user = saved_user
-            return True
-    except Exception:
-        return False
-    return False
-
-
 def ensure_google_user(email: str, full_name: str = ""):
     """Create a local profile row for Google users if missing."""
-    email = email.strip().lower()
+    email = (email or "").strip().lower()
     if not email:
         return
     if email not in st.session_state.users:
-        # Unusable random local password (Google users sign in via Google)
+        # Random local password hash (Google users sign in via Google)
         st.session_state.users[email] = hash_password(os.urandom(16).hex())
         save_users(st.session_state.users)
     if full_name and not st.session_state.get("full_name"):
@@ -164,7 +124,6 @@ default_values = {
     "daily_quote": None,
     "challenge_week": 1,
     "challenge_done": False,
-    "auth_checked": False,
 }
 
 for key, value in default_values.items():
@@ -173,17 +132,10 @@ for key, value in default_values.items():
 
 
 # =====================================================
-# AUTH RESTORE (cookie + optional Streamlit Google auth)
+# GOOGLE AUTH RESTORE (no cookies)
 # =====================================================
-# 1) Cookie remember-me
-if not st.session_state.logged_in:
-    try_auto_login_from_cookie(st.session_state.users)
-
-# 2) Streamlit native Google auth (if configured in secrets [auth])
-# Works on Streamlit versions that support st.user / st.login
 if not st.session_state.logged_in:
     try:
-        # Newer Streamlit identity API
         if hasattr(st, "user") and getattr(st.user, "is_logged_in", False):
             email = (getattr(st.user, "email", None) or "").strip().lower()
             name = getattr(st.user, "name", "") or email
@@ -211,7 +163,6 @@ if not st.session_state.logged_in:
         with st.form("login_form"):
             username_input = st.text_input("Username", key="login_username")
             password_input = st.text_input("Password", type="password", key="login_password")
-            remember_me = st.checkbox("Remember me for 7 days", value=True)
             login_button = st.form_submit_button("Login")
 
             if login_button:
@@ -224,8 +175,6 @@ if not st.session_state.logged_in:
                 ):
                     st.session_state.logged_in = True
                     st.session_state.current_user = username_input
-                    if remember_me:
-                        set_remember_cookie(username_input, days=7)
                     st.success("Login successful.")
                     st.rerun()
                 else:
@@ -234,9 +183,7 @@ if not st.session_state.logged_in:
         st.divider()
         st.write("Or continue with Google")
 
-        # Native Streamlit Google login button (uses secrets [auth])
-        google_supported = hasattr(st, "login")
-        if google_supported:
+        if hasattr(st, "login"):
             try:
                 st.login("google")
                 st.caption("After Google approval, the app will sign you in automatically.")
@@ -249,7 +196,7 @@ if not st.session_state.logged_in:
         else:
             st.info(
                 "This Streamlit version may not support st.login(). "
-                "Upgrade Streamlit or use username/password login."
+                "Use username/password login."
             )
 
     with register_tab:
@@ -302,18 +249,13 @@ with st.sidebar:
     st.divider()
 
     if st.button("Logout", width="stretch"):
-        # Clear local session
         st.session_state.logged_in = False
         st.session_state.current_user = None
-        clear_remember_cookie()
-
-        # Clear Streamlit Google session if available
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except Exception:
             pass
-
         st.rerun()
 
 
