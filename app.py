@@ -9,6 +9,7 @@ from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
+
 import plotly.express as px
 
 
@@ -28,18 +29,39 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .main { background-color: #E91E63; }
-    .block-container { padding-top: 2rem; padding-bottom: 3rem; }
-    [data-testid="stSidebar"] { background-color: #E91E63; }
-    [data-testid="stSidebar"] * { color: white; }
-    h1, h2, h3 { font-weight: 700; }
+    .main {
+        background-color: #F7F9FC;
+    }
+
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #E91E63;
+    }
+
+    [data-testid="stSidebar"] * {
+        color: white;
+    }
+
+    h1, h2, h3 {
+        font-weight: 700;
+    }
+
     div[data-testid="stMetric"] {
-        background-color: #6A1B9A;
+        background-color: #FFFFFF;
         padding: 15px;
         border-radius: 15px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
-    .stButton > button { border-radius: 10px; font-weight: 600; }
+
+    .stButton > button {
+        border-radius: 10px;
+        font-weight: 600;
+    }
+
     .app-footer {
         text-align: center;
         padding: 20px;
@@ -58,44 +80,51 @@ st.markdown(
 USER_FILE = "users.json"
 
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+def hash_password(password):
+    return hashlib.sha256(
+        password.encode("utf-8")
+    ).hexdigest()
 
 
 def load_users():
     if os.path.exists(USER_FILE):
         try:
-            with open(USER_FILE, "r", encoding="utf-8") as file:
+            with open(
+                USER_FILE,
+                "r",
+                encoding="utf-8"
+            ) as file:
                 saved_users = json.load(file)
 
             converted_users = {}
+
             for username, password in saved_users.items():
-                if len(str(password)) == 64:
+                password = str(password)
+
+                if len(password) == 64:
                     converted_users[username] = password
                 else:
-                    converted_users[username] = hash_password(str(password))
+                    converted_users[username] = hash_password(password)
+
             return converted_users
+
         except Exception:
-            return {"demo": hash_password("password")}
-    return {"demo": hash_password("password")}
+            return {
+                "demo": hash_password("password")
+            }
+
+    return {
+        "demo": hash_password("password")
+    }
 
 
 def save_users(users):
-    with open(USER_FILE, "w", encoding="utf-8") as file:
+    with open(
+        USER_FILE,
+        "w",
+        encoding="utf-8"
+    ) as file:
         json.dump(users, file, indent=4)
-
-
-def ensure_google_user(email: str, full_name: str = ""):
-    """Create a local profile row for Google users if missing."""
-    email = (email or "").strip().lower()
-    if not email:
-        return
-    if email not in st.session_state.users:
-        # Random local password hash (Google users sign in via Google)
-        st.session_state.users[email] = hash_password(os.urandom(16).hex())
-        save_users(st.session_state.users)
-    if full_name and not st.session_state.get("full_name"):
-        st.session_state.full_name = full_name
 
 
 # =====================================================
@@ -105,26 +134,33 @@ default_values = {
     "users": load_users(),
     "logged_in": False,
     "current_user": None,
+
     "goals": [],
     "score_history": [],
     "badges": [],
     "demo_group": "Prefer not to say",
+
     "water": 0,
     "exercise": 0,
     "sleep": 7.0,
+
     "habit_diet": False,
     "habit_tobacco": False,
     "habit_activity": False,
     "habit_sun": False,
     "habit_screening": False,
+
     "awareness_score": 0,
+
     "full_name": "",
     "profile_age": 30,
     "health_goal": "Improve my diet",
+
     "daily_quote": None,
     "challenge_week": 1,
-    "challenge_done": False,
+    "challenge_done": False
 }
+
 
 for key, value in default_values.items():
     if key not in st.session_state:
@@ -132,130 +168,292 @@ for key, value in default_values.items():
 
 
 # =====================================================
-# GOOGLE AUTH RESTORE (no cookies)
+# GOOGLE AUTHENTICATION RESTORE
 # =====================================================
 if not st.session_state.logged_in:
+
     try:
-        if hasattr(st, "user") and getattr(st.user, "is_logged_in", False):
-            email = (getattr(st.user, "email", None) or "").strip().lower()
-            name = getattr(st.user, "name", "") or email
-            if email:
-                ensure_google_user(email, name)
+        if (
+            hasattr(st, "user")
+            and st.user.is_logged_in
+        ):
+            google_email = st.user.get(
+                "email",
+                ""
+            )
+
+            google_name = st.user.get(
+                "name",
+                google_email
+            )
+
+            if google_email:
+
+                google_email = google_email.strip().lower()
+
                 st.session_state.logged_in = True
-                st.session_state.current_user = email
-                if name:
-                    st.session_state.full_name = name
+                st.session_state.current_user = google_email
+                st.session_state.full_name = google_name
+
     except Exception:
         pass
 
 
 # =====================================================
-# LOGIN AND REGISTRATION GATE
+# LOGIN AND REGISTRATION
 # =====================================================
 if not st.session_state.logged_in:
 
     st.title("🔐 Customer Access Portal")
-    st.caption("Early Awareness. Better Health. Brighter Future")
 
-    login_tab, register_tab = st.tabs(["Login", "Sign Up / Register"])
+    st.caption(
+        "Early Awareness. Better Health. Brighter Future"
+    )
+
+    login_tab, register_tab = st.tabs(
+        [
+            "Login",
+            "Sign Up / Register"
+        ]
+    )
 
     with login_tab:
+
         with st.form("login_form"):
-            username_input = st.text_input("Username", key="login_username")
-            password_input = st.text_input("Password", type="password", key="login_password")
-            login_button = st.form_submit_button("Login")
+
+            username_input = st.text_input(
+                "Username",
+                key="login_username"
+            )
+
+            password_input = st.text_input(
+                "Password",
+                type="password",
+                key="login_password"
+            )
+
+            login_button = st.form_submit_button(
+                "Login"
+            )
 
             if login_button:
-                username_input = username_input.strip()
-                password_hash = hash_password(password_input)
+
+                username = username_input.strip()
+                password_hash = hash_password(
+                    password_input
+                )
 
                 if (
-                    username_input in st.session_state.users
-                    and st.session_state.users[username_input] == password_hash
+                    username in st.session_state.users
+                    and
+                    st.session_state.users[username]
+                    == password_hash
                 ):
+
                     st.session_state.logged_in = True
-                    st.session_state.current_user = username_input
-                    st.success("Login successful.")
+                    st.session_state.current_user = username
+
                     st.rerun()
+
                 else:
-                    st.error("Incorrect username or password.")
+                    st.error(
+                        "Incorrect username or password."
+                    )
 
         st.divider()
-        st.write("Or continue with Google")
+
+        st.write(
+            "You can also sign in with Google."
+        )
 
         if hasattr(st, "login"):
-            try:
+
+            if st.button(
+                "Continue with Google",
+                width="stretch"
+            ):
                 st.login("google")
-                st.caption("After Google approval, the app will sign you in automatically.")
-            except Exception as e:
-                st.warning(
-                    "Google login is not fully configured yet. "
-                    "Check Streamlit secrets [auth] and Google redirect URI."
-                )
-                st.caption(str(e))
+
         else:
+
             st.info(
-                "This Streamlit version may not support st.login(). "
-                "Use username/password login."
+                "Google login requires a recent Streamlit version."
             )
 
     with register_tab:
+
         with st.form("register_form"):
-            new_username = st.text_input("Choose a username", key="register_username")
-            new_password = st.text_input("Choose a password", type="password", key="register_password")
-            confirm_password = st.text_input("Confirm password", type="password", key="confirm_password")
-            register_button = st.form_submit_button("Create Account")
+
+            new_username = st.text_input(
+                "Choose a username",
+                key="register_username"
+            )
+
+            new_password = st.text_input(
+                "Choose a password",
+                type="password",
+                key="register_password"
+            )
+
+            confirm_password = st.text_input(
+                "Confirm password",
+                type="password",
+                key="confirm_password"
+            )
+
+            register_button = st.form_submit_button(
+                "Create Account"
+            )
 
             if register_button:
+
                 new_username = new_username.strip()
 
                 if not new_username or not new_password:
-                    st.error("Please complete all fields.")
-                elif len(new_username) < 3:
-                    st.error("Username must contain at least 3 characters.")
-                elif len(new_password) < 6:
-                    st.error("Password must contain at least 6 characters.")
-                elif new_password != confirm_password:
-                    st.error("Passwords do not match.")
-                elif new_username in st.session_state.users:
-                    st.error("Username already exists.")
-                else:
-                    st.session_state.users[new_username] = hash_password(new_password)
-                    save_users(st.session_state.users)
-                    st.success("Account created successfully. You can now log in.")
 
-    st.info("Demo account: username `demo`, password `password`.")
-    st.warning(
-        "Portfolio authentication demo only. Do not use real medical or sensitive customer data."
+                    st.error(
+                        "Please complete all fields."
+                    )
+
+                elif len(new_username) < 3:
+
+                    st.error(
+                        "Username must contain at least 3 characters."
+                    )
+
+                elif len(new_password) < 6:
+
+                    st.error(
+                        "Password must contain at least 6 characters."
+                    )
+
+                elif new_password != confirm_password:
+
+                    st.error(
+                        "Passwords do not match."
+                    )
+
+                elif new_username in st.session_state.users:
+
+                    st.error(
+                        "Username already exists."
+                    )
+
+                else:
+
+                    st.session_state.users[
+                        new_username
+                    ] = hash_password(
+                        new_password
+                    )
+
+                    save_users(
+                        st.session_state.users
+                    )
+
+                    st.success(
+                        "Account created successfully. "
+                        "You can now log in."
+                    )
+
+    st.info(
+        "Demo account: username `demo`, password `password`."
     )
+
+    st.warning(
+        "This is a portfolio authentication demo. "
+        "Do not use real medical or sensitive customer data."
+    )
+
     st.stop()
 
+# =====================================================
+# GOOGLE USER INFORMATION
+# =====================================================
+if hasattr(st, "user") and st.user.is_logged_in:
 
+    current_user = st.user.get(
+        "name",
+        st.user.get("email", "Google User")
+    )
+
+    current_email = st.user.get(
+        "email",
+        ""
+    )
+
+else:
+
+    current_user = st.session_state.get(
+        "current_user",
+        "User"
+    )
+
+    current_email = ""
+
+    st.write(f"Logged in as: {current_user}")
+    
 # =====================================================
 # SIDEBAR
 # =====================================================
 with st.sidebar:
+
     st.title("CancerGuard AI")
-    st.write(f"Logged in as: {st.session_state.current_user}")
-    st.divider()
-    st.caption("Your health awareness companion")
-    st.divider()
-    st.subheader("Quick Statistics")
-    st.metric("Awareness Score", f"{st.session_state.awareness_score}/100")
-    st.metric("Water Intake", f"{st.session_state.water}/8 glasses")
-    st.metric("Exercise", f"{st.session_state.exercise} minutes")
-    st.divider()
-    st.caption("Built by Toluwalope")
+
+    st.write(
+        f"Logged in as: "
+        f"{st.session_state.current_user}"
+    )
+
     st.divider()
 
-    if st.button("Logout", width="stretch"):
+    st.caption(
+        "Your health awareness companion"
+    )
+
+    st.divider()
+
+    st.subheader(
+        "Quick Statistics"
+    )
+
+    st.metric(
+        "Awareness Score",
+        f"{st.session_state.awareness_score}/100"
+    )
+
+    st.metric(
+        "Water Intake",
+        f"{st.session_state.water}/8 glasses"
+    )
+
+    st.metric(
+        "Exercise",
+        f"{st.session_state.exercise} minutes"
+    )
+
+    st.divider()
+
+    st.caption(
+        "Built by Toluwalope"
+    )
+
+    st.divider()
+
+    if st.button(
+        "Logout",
+        width="stretch"
+    ):
+
         st.session_state.logged_in = False
         st.session_state.current_user = None
+
         try:
             if hasattr(st, "logout"):
                 st.logout()
         except Exception:
             pass
+
         st.rerun()
 
 
@@ -683,49 +881,130 @@ with tab_prevention:
 # HEALTHY LIVING
 # =====================================================
 with tab_lifestyle:
+
     st.title("Healthy Living")
+
     st.image(
         "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1000&q=80",
         caption="Small daily habits support a healthy lifestyle",
         width="stretch"
     )
-    st.write("Track simple daily habits that support general health.")
+
+    st.write(
+        "Track simple daily habits that support general health."
+    )
+
     st.divider()
 
     st.subheader("Water Intake")
-    st.slider("Glasses of water today", min_value=0, max_value=15, key="water")
+
+    st.slider(
+        "Glasses of water today",
+        min_value=0,
+        max_value=15,
+        key="water"
+    )
+
     water_value = st.session_state.water
-    st.progress(min(water_value / 15, 1.0))
+
+    st.progress(
+        min(water_value / 15, 1.0)
+    )
+
     if water_value >= 8:
-        st.success("You reached the water target.")
+
+        st.success(
+            "You reached the water target."
+        )
+
     else:
-        st.info(f"{8 - water_value} more glasses to reach the target.")
+
+        st.info(
+            f"{8 - water_value} more glasses "
+            "to reach the target."
+        )
 
     st.divider()
+
     st.subheader("Exercise")
-    st.slider("Minutes of exercise today", min_value=0, max_value=180, key="exercise")
+
+    st.slider(
+        "Minutes of exercise today",
+        min_value=0,
+        max_value=180,
+        key="exercise"
+    )
+
     exercise_value = st.session_state.exercise
+
     if exercise_value >= 30:
-        st.success("You completed at least 30 minutes of activity.")
+
+        st.success(
+            "You completed at least 30 minutes "
+            "of activity."
+        )
+
     else:
-        st.info(f"{30 - exercise_value} more minutes to reach today's target.")
+
+        st.info(
+            f"{30 - exercise_value} more minutes "
+            "to reach today's target."
+        )
 
     st.divider()
+
     st.subheader("Sleep")
-    st.slider("Hours of sleep last night", min_value=0.0, max_value=12.0, step=0.5, key="sleep")
+
+    st.slider(
+        "Hours of sleep last night",
+        min_value=0.0,
+        max_value=12.0,
+        step=0.5,
+        key="sleep"
+    )
+
     sleep_value = st.session_state.sleep
+
     if sleep_value >= 7:
-        st.success("Your sleep duration meets the general target.")
+
+        st.success(
+            "Your sleep duration meets the general target."
+        )
+
     else:
-        st.warning("Consider improving your sleep routine.")
+
+        st.warning(
+            "Consider improving your sleep routine."
+        )
 
     st.divider()
+
     st.subheader("Daily Healthy Habits")
-    st.checkbox("Ate fruits and vegetables", key="habit_diet")
-    st.checkbox("Avoided tobacco", key="habit_tobacco")
-    st.checkbox("Completed physical activity", key="habit_activity")
-    st.checkbox("Protected myself from excessive sun exposure", key="habit_sun")
-    st.checkbox("Stayed up to date with health checks", key="habit_screening")
+
+    st.checkbox(
+        "Ate fruits and vegetables",
+        key="habit_diet"
+    )
+
+    st.checkbox(
+        "Avoided tobacco",
+        key="habit_tobacco"
+    )
+
+    st.checkbox(
+        "Completed physical activity",
+        key="habit_activity"
+    )
+
+    st.checkbox(
+        "Protected myself from excessive sun exposure",
+        key="habit_sun"
+    )
+
+    st.checkbox(
+        "Stayed up to date with health checks",
+        key="habit_screening"
+    )
 
     daily_habit_total = sum(
         [
@@ -736,12 +1015,20 @@ with tab_lifestyle:
             st.session_state.habit_screening
         ]
     )
-    st.write(f"Daily Habit Score: {daily_habit_total}/5")
-    st.progress(daily_habit_total / 5)
-    if daily_habit_total == 5:
-        st.success("You completed all your daily habits.")
-        st.balloons()
 
+    st.write(
+        f"Daily Habit Score: {daily_habit_total}/5"
+    )
+
+    st.progress(
+        daily_habit_total / 5
+    )
+
+    if daily_habit_total == 5:
+
+        st.success(
+            "You completed all your daily habits."
+        )
 
 # =====================================================
 # GOALS AND PROGRESS
