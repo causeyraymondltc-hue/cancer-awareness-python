@@ -1,11 +1,19 @@
 """
 CancerGuard AI - Visual components.
-Contains CSS styling and embedded React components rendered
-through Streamlit's HTML component bridge.
+CSS styling and embedded React components.
 """
 
 import json
-import streamlit.components.v1 as components
+import streamlit as st
+
+
+def _render_html(html, height):
+    """Render raw HTML, supporting both old and new Streamlit APIs."""
+    if hasattr(st, "iframe"):
+        st.iframe(html, height=height)
+    else:
+        import streamlit.components.v1 as components
+        components.html(html, height=height)
 
 
 # =====================================================
@@ -197,26 +205,81 @@ div[data-testid="stExpander"] {
 
 
 # =====================================================
+# ANIMATED BACKGROUND (safe - cannot cover content)
+# =====================================================
+ANIMATED_BACKGROUND = """
+<style>
+[data-testid="stAppViewContainer"] {
+    background-image:
+        radial-gradient(
+            circle at 15% 20%,
+            rgba(236, 72, 153, 0.12) 0%,
+            rgba(236, 72, 153, 0) 42%
+        ),
+        radial-gradient(
+            circle at 85% 75%,
+            rgba(124, 58, 237, 0.12) 0%,
+            rgba(124, 58, 237, 0) 45%
+        ),
+        radial-gradient(
+            circle at 50% 50%,
+            rgba(56, 189, 248, 0.08) 0%,
+            rgba(56, 189, 248, 0) 38%
+        );
+    background-attachment: fixed;
+    background-size: 220% 220%;
+    animation: bgDrift 34s ease-in-out infinite alternate;
+}
+
+@keyframes bgDrift {
+    0%   { background-position: 0% 0%, 100% 100%, 50% 50%; }
+    50%  { background-position: 30% 25%, 70% 65%, 35% 60%; }
+    100% { background-position: 12% 40%, 85% 30%, 60% 40%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-testid="stAppViewContainer"] {
+        animation: none;
+    }
+}
+</style>
+"""
+
+
+# =====================================================
 # HERO BANNER
 # =====================================================
-def hero_banner(title, subtitle, tagline):
+def hero_banner(title, subtitle, tagline, height=250):
     """Render an animated gradient hero header."""
     html = f"""
-    <div style="
-        background: linear-gradient(120deg, #BE185D, #7C3AED, #0EA5E9);
-        background-size: 300% 300%;
-        animation: gradientMove 12s ease infinite;
-        border-radius: 22px;
-        padding: 46px 34px;
-        color: white;
-        box-shadow: 0 18px 40px rgba(124, 58, 237, 0.28);
-        font-family: 'Inter', system-ui, sans-serif;
-    ">
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+      body {{ margin: 0; font-family: 'Inter', sans-serif; }}
+      @keyframes gradientMove {{
+          0%   {{ background-position: 0% 50%; }}
+          50%  {{ background-position: 100% 50%; }}
+          100% {{ background-position: 0% 50%; }}
+      }}
+      @media (prefers-reduced-motion: reduce) {{
+          .hb-wrap {{ animation: none; }}
+      }}
+      .hb-wrap {{
+          background: linear-gradient(120deg, #BE185D, #7C3AED, #0EA5E9);
+          background-size: 300% 300%;
+          animation: gradientMove 14s ease infinite;
+          border-radius: 22px;
+          padding: 42px 34px;
+          color: white;
+          box-shadow: 0 18px 40px rgba(124, 58, 237, 0.26);
+      }}
+    </style>
+
+    <div class="hb-wrap">
         <div style="font-size: 13px; letter-spacing: 3px;
                     text-transform: uppercase; opacity: 0.85;">
             {tagline}
         </div>
-        <div style="font-size: 44px; font-weight: 800;
+        <div style="font-size: 42px; font-weight: 800;
                     margin-top: 10px; line-height: 1.1;">
             {title}
         </div>
@@ -225,17 +288,134 @@ def hero_banner(title, subtitle, tagline):
             {subtitle}
         </div>
     </div>
-
-    <style>
-    body {{ margin: 0; }}
-    @keyframes gradientMove {{
-        0%   {{ background-position: 0% 50%; }}
-        50%  {{ background-position: 100% 50%; }}
-        100% {{ background-position: 0% 50%; }}
-    }}
-    </style>
     """
-    components.html(html, height=250)
+    _render_html(html, height)
+
+
+# =====================================================
+# COMPACT DASHBOARD STRIP
+# =====================================================
+def dashboard_strip(username, stats, height=185):
+    """
+    Compact welcome bar with inline stats.
+
+    stats: list of dicts with keys
+        label, value, percent
+    """
+    items = ""
+
+    for stat in stats:
+        items += f"""
+        <div class="ds-item">
+            <div class="ds-val">{stat['value']}</div>
+            <div class="ds-lab">{stat['label']}</div>
+            <div class="ds-track">
+                <div class="ds-fill"
+                     style="width:{stat['percent']}%"></div>
+            </div>
+        </div>
+        """
+
+    html = f"""
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+      body {{ margin: 0; font-family: 'Inter', sans-serif; }}
+
+      .ds-wrap {{
+          background: linear-gradient(120deg, #BE185D, #7C3AED, #0EA5E9);
+          background-size: 280% 280%;
+          animation: dsShift 18s ease infinite;
+          border-radius: 18px;
+          padding: 22px 26px;
+          color: #FFFFFF;
+          display: flex;
+          align-items: center;
+          gap: 26px;
+          flex-wrap: wrap;
+          box-shadow: 0 12px 30px rgba(124,58,237,.24);
+      }}
+
+      .ds-hello {{ flex: 1 1 200px; min-width: 190px; }}
+
+      .ds-name {{
+          font-size: 24px;
+          font-weight: 800;
+          line-height: 1.15;
+      }}
+
+      .ds-sub {{
+          font-size: 13px;
+          opacity: .88;
+          margin-top: 4px;
+      }}
+
+      .ds-stats {{
+          display: flex;
+          gap: 14px;
+          flex-wrap: wrap;
+      }}
+
+      .ds-item {{
+          background: rgba(255,255,255,.15);
+          border: 1px solid rgba(255,255,255,.24);
+          border-radius: 12px;
+          padding: 12px 16px;
+          min-width: 106px;
+      }}
+
+      .ds-val {{
+          font-size: 23px;
+          font-weight: 800;
+          line-height: 1;
+      }}
+
+      .ds-lab {{
+          font-size: 11px;
+          letter-spacing: 1.1px;
+          text-transform: uppercase;
+          opacity: .86;
+          margin-top: 5px;
+      }}
+
+      .ds-track {{
+          margin-top: 9px;
+          height: 5px;
+          border-radius: 99px;
+          background: rgba(255,255,255,.28);
+          overflow: hidden;
+      }}
+
+      .ds-fill {{
+          height: 100%;
+          background: #FFFFFF;
+          border-radius: 99px;
+          animation: dsGrow 1.1s cubic-bezier(.22,1,.36,1);
+      }}
+
+      @keyframes dsShift {{
+          0%   {{ background-position: 0% 50%; }}
+          50%  {{ background-position: 100% 50%; }}
+          100% {{ background-position: 0% 50%; }}
+      }}
+
+      @keyframes dsGrow {{
+          from {{ width: 0; }}
+      }}
+
+      @media (prefers-reduced-motion: reduce) {{
+          .ds-wrap, .ds-fill {{ animation: none; }}
+      }}
+    </style>
+
+    <div class="ds-wrap">
+      <div class="ds-hello">
+        <div class="ds-name">Welcome back, {username}</div>
+        <div class="ds-sub">Track your habits and build awareness.</div>
+      </div>
+      <div class="ds-stats">{items}</div>
+    </div>
+    """
+    _render_html(html, height)
 
 
 # =====================================================
@@ -269,7 +449,6 @@ def react_stat_cards(cards, height=230):
           border-radius: 18px;
           padding: 20px;
           color: white;
-          position: relative;
           overflow: hidden;
           box-shadow: 0 10px 26px rgba(15,23,42,0.16);
           transition: transform .25s ease, box-shadow .25s ease;
@@ -359,7 +538,7 @@ def react_stat_cards(cards, height=230):
       ).render(e(Grid));
     </script>
     """
-    components.html(html, height=height)
+    _render_html(html, height)
 
 
 # =====================================================
@@ -452,7 +631,55 @@ def react_progress_rings(rings, height=220):
       ).render(e(Rings));
     </script>
     """
-    components.html(html, height=height)
+    _render_html(html, height)
+
+
+# =====================================================
+# TABLE RENDERER (no pyarrow required)
+# =====================================================
+def render_table(dataframe):
+    """Render a DataFrame as an HTML table without pyarrow."""
+    html = dataframe.to_html(
+        index=False,
+        border=0,
+        classes="cg-table",
+        escape=True
+    )
+
+    style = """
+    <style>
+    .cg-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #E2E8F0;
+    }
+    .cg-table th {
+        background: linear-gradient(135deg, #EC4899 0%, #BE185D 100%);
+        color: #FFFFFF;
+        text-align: left;
+        padding: 11px 13px;
+        font-weight: 700;
+    }
+    .cg-table td {
+        padding: 10px 13px;
+        border-bottom: 1px solid #E2E8F0;
+        color: #0F172A;
+        background: #FFFFFF;
+    }
+    .cg-table tr:nth-child(even) td {
+        background: #F8FAFC;
+    }
+    .cg-table tr:hover td {
+        background: #FDF2F8;
+    }
+    </style>
+    """
+
+    st.markdown(style + html, unsafe_allow_html=True)
 
 
 # =====================================================

@@ -4,6 +4,7 @@ import random
 import json
 import os
 import hashlib
+import secrets
 
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
@@ -32,11 +33,16 @@ from assistant import answer_question
 
 from visuals import (
     GLOBAL_CSS,
+    ANIMATED_BACKGROUND,
+    dashboard_strip,
     hero_banner,
     react_stat_cards,
     react_progress_rings,
-    style_chart
+    style_chart,
+    render_table
 )
+
+from images import image_banner, framed_image
 
 
 # =====================================================
@@ -49,12 +55,27 @@ st.set_page_config(
 )
 
 st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+st.markdown(ANIMATED_BACKGROUND, unsafe_allow_html=True)
 
 
 # =====================================================
 # USER ACCOUNT STORAGE
 # =====================================================
 USER_FILE = "users.json"
+
+SECURITY_QUESTIONS = [
+    "What was the name of your first school?",
+    "What is your mother's maiden name?",
+    "What was the name of your first pet?",
+    "What city were you born in?",
+    "What is your favourite book?"
+]
+
+
+def hash_value(value):
+    return hashlib.sha256(
+        value.strip().lower().encode("utf-8")
+    ).hexdigest()
 
 
 def hash_password(password):
@@ -64,32 +85,87 @@ def hash_password(password):
 
 
 def load_users():
-    if os.path.exists(USER_FILE):
-        try:
-            with open(USER_FILE, "r", encoding="utf-8") as file:
-                saved_users = json.load(file)
+    """Load users. Supports old string format and new dict format."""
+    if not os.path.exists(USER_FILE):
+        return {
+            "demo": {
+                "password": hash_password("password"),
+                "question": SECURITY_QUESTIONS[0],
+                "answer": hash_value("demo school"),
+                "token": ""
+            }
+        }
 
-            converted_users = {}
+    try:
+        with open(USER_FILE, "r", encoding="utf-8") as file:
+            saved = json.load(file)
 
-            for username, password in saved_users.items():
-                password = str(password)
+        converted = {}
 
-                if len(password) == 64:
-                    converted_users[username] = password
-                else:
-                    converted_users[username] = hash_password(password)
+        for username, record in saved.items():
 
-            return converted_users
+            if isinstance(record, str):
+                converted[username] = {
+                    "password": (
+                        record if len(record) == 64
+                        else hash_password(record)
+                    ),
+                    "question": SECURITY_QUESTIONS[0],
+                    "answer": "",
+                    "token": ""
+                }
+            else:
+                converted[username] = {
+                    "password": record.get("password", ""),
+                    "question": record.get(
+                        "question", SECURITY_QUESTIONS[0]
+                    ),
+                    "answer": record.get("answer", ""),
+                    "token": record.get("token", "")
+                }
 
-        except Exception:
-            return {"demo": hash_password("password")}
+        return converted
 
-    return {"demo": hash_password("password")}
+    except Exception:
+        return {
+            "demo": {
+                "password": hash_password("password"),
+                "question": SECURITY_QUESTIONS[0],
+                "answer": hash_value("demo school"),
+                "token": ""
+            }
+        }
 
 
 def save_users(users):
     with open(USER_FILE, "w", encoding="utf-8") as file:
         json.dump(users, file, indent=4)
+
+
+def issue_token(username):
+    """Create and store a remember-me token."""
+    token = secrets.token_urlsafe(24)
+    st.session_state.users[username]["token"] = token
+    save_users(st.session_state.users)
+    return token
+
+
+def find_user_by_token(token):
+    """Return username matching a remember-me token."""
+    if not token:
+        return None
+
+    for username, record in st.session_state.users.items():
+        if record.get("token") and record["token"] == token:
+            return username
+
+    return None
+
+
+def clear_token(username):
+    if username in st.session_state.users:
+        st.session_state.users[username]["token"] = ""
+        save_users(st.session_state.users)
 
 
 # =====================================================
@@ -133,39 +209,39 @@ for key, value in default_values.items():
 
 
 # =====================================================
-# GOOGLE AUTHENTICATION RESTORE
-# =====================================================
-if not st.session_state.get("logged_in", False):
-    try:
-        if hasattr(st, "user") and st.user.is_logged_in:
-
-            google_email = st.user.get("email", "")
-            google_name = st.user.get("name", google_email)
-
-            if google_email:
-                st.session_state.logged_in = True
-                st.session_state.current_user = google_email.strip().lower()
-
-                if google_name and not st.session_state.get("full_name"):
-                    st.session_state.full_name = google_name
-
-    except Exception:
-        pass
-
-
-# =====================================================
-# LOGIN AND REGISTRATION
+# REMEMBER ME RESTORE
 # =====================================================
 if not st.session_state.get("logged_in", False):
 
-    st.title("🔐 Customer Access Portal")
+    saved_token = st.query_params.get("t", "")
+    matched_user = find_user_by_token(saved_token)
 
-    st.caption("Early Awareness. Better Health. Brighter Future")
+    if matched_user:
+        st.session_state.logged_in = True
+        st.session_state.current_user = matched_user
 
-    login_tab, register_tab = st.tabs(
-        ["Login", "Sign Up / Register"]
+
+# =====================================================
+# LOGIN, REGISTER AND PASSWORD RESET
+# =====================================================
+if not st.session_state.get("logged_in", False):
+
+    image_banner(
+        "sunrise",
+        "CancerGuard AI",
+        "Early awareness. Better health. A brighter future.",
+        height=240
     )
 
+    st.title("Customer Access Portal")
+
+    login_tab, register_tab, reset_tab = st.tabs(
+        ["Login", "Create Account", "Forgot Password"]
+    )
+
+    # -------------------------------------------------
+    # LOGIN
+    # -------------------------------------------------
     with login_tab:
 
         with st.form("login_form"):
@@ -181,19 +257,30 @@ if not st.session_state.get("logged_in", False):
                 key="login_password"
             )
 
+            remember_me = st.checkbox(
+                "Keep me signed in on this device",
+                value=False,
+                key="remember_me"
+            )
+
             login_button = st.form_submit_button("Login")
 
             if login_button:
 
                 username = username_input.strip()
-                password_hash = hash_password(password_input)
+                entered = hash_password(password_input)
 
-                if (
-                    username in st.session_state.users
-                    and st.session_state.users[username] == password_hash
-                ):
+                record = st.session_state.users.get(username)
+
+                if record and record.get("password") == entered:
+
                     st.session_state.logged_in = True
                     st.session_state.current_user = username
+
+                    if remember_me:
+                        token = issue_token(username)
+                        st.query_params["t"] = token
+
                     st.rerun()
 
                 else:
@@ -201,22 +288,15 @@ if not st.session_state.get("logged_in", False):
 
         st.divider()
 
-        st.write("You can also sign in with Google.")
+        st.caption(
+            "CancerGuard AI uses username and password authentication. "
+            "Single sign-on with Google is documented in the project "
+            "roadmap as a planned enhancement."
+        )
 
-        if hasattr(st, "login"):
-
-            if st.button("Continue with Google", width="stretch"):
-                try:
-                    st.login("google")
-                except Exception:
-                    st.warning(
-                        "Google login is not configured for this environment. "
-                        "Use username and password instead."
-                    )
-
-        else:
-            st.info("Google login requires a recent Streamlit version.")
-
+    # -------------------------------------------------
+    # REGISTER
+    # -------------------------------------------------
     with register_tab:
 
         with st.form("register_form"):
@@ -238,6 +318,17 @@ if not st.session_state.get("logged_in", False):
                 key="confirm_password"
             )
 
+            chosen_question = st.selectbox(
+                "Security question for password recovery",
+                SECURITY_QUESTIONS,
+                key="register_question"
+            )
+
+            chosen_answer = st.text_input(
+                "Your answer",
+                key="register_answer"
+            )
+
             register_button = st.form_submit_button("Create Account")
 
             if register_button:
@@ -248,31 +339,140 @@ if not st.session_state.get("logged_in", False):
                     st.error("Please complete all fields.")
 
                 elif len(new_username) < 3:
-                    st.error("Username must contain at least 3 characters.")
+                    st.error(
+                        "Username must contain at least 3 characters."
+                    )
 
                 elif len(new_password) < 6:
-                    st.error("Password must contain at least 6 characters.")
+                    st.error(
+                        "Password must contain at least 6 characters."
+                    )
 
                 elif new_password != confirm_password:
                     st.error("Passwords do not match.")
+
+                elif not chosen_answer.strip():
+                    st.error(
+                        "Please answer the security question so you can "
+                        "recover your account later."
+                    )
 
                 elif new_username in st.session_state.users:
                     st.error("Username already exists.")
 
                 else:
-                    st.session_state.users[new_username] = hash_password(
-                        new_password
-                    )
+                    st.session_state.users[new_username] = {
+                        "password": hash_password(new_password),
+                        "question": chosen_question,
+                        "answer": hash_value(chosen_answer),
+                        "token": ""
+                    }
+
                     save_users(st.session_state.users)
+
                     st.success(
-                        "Account created successfully. You can now log in."
+                        "Account created. You can now log in."
                     )
 
-    st.info("Demo account: username `demo`, password `password`.")
+    # -------------------------------------------------
+    # FORGOT PASSWORD
+    # -------------------------------------------------
+    with reset_tab:
+
+        st.write(
+            "Reset your password by answering your security question."
+        )
+
+        reset_username = st.text_input(
+            "Your username",
+            key="reset_username"
+        )
+
+        reset_target = st.session_state.get("users", {}).get(
+            reset_username.strip()
+        )
+
+        if reset_username.strip() and not reset_target:
+            st.error("No account found with that username.")
+
+        elif reset_target:
+
+            if not reset_target.get("answer"):
+                st.warning(
+                    "This account has no security question set, so it "
+                    "cannot be recovered. Please create a new account."
+                )
+
+            else:
+
+                with st.form("reset_form"):
+
+                    st.info(reset_target["question"])
+
+                    reset_answer = st.text_input(
+                        "Your answer",
+                        key="reset_answer"
+                    )
+
+                    reset_new = st.text_input(
+                        "New password",
+                        type="password",
+                        key="reset_new"
+                    )
+
+                    reset_confirm = st.text_input(
+                        "Confirm new password",
+                        type="password",
+                        key="reset_confirm"
+                    )
+
+                    reset_button = st.form_submit_button(
+                        "Reset Password"
+                    )
+
+                    if reset_button:
+
+                        if hash_value(reset_answer) != reset_target["answer"]:
+                            st.error("That answer does not match.")
+
+                        elif len(reset_new) < 6:
+                            st.error(
+                                "Password must contain at least "
+                                "6 characters."
+                            )
+
+                        elif reset_new != reset_confirm:
+                            st.error("Passwords do not match.")
+
+                        else:
+                            username_clean = reset_username.strip()
+
+                            st.session_state.users[username_clean][
+                                "password"
+                            ] = hash_password(reset_new)
+
+                            st.session_state.users[username_clean][
+                                "token"
+                            ] = ""
+
+                            save_users(st.session_state.users)
+
+                            st.success(
+                                "Password reset. Please log in with your "
+                                "new password."
+                            )
+
+    st.divider()
+
+    st.info(
+        "Demo account: username `demo`, password `password`. "
+        "Security answer: `demo school`"
+    )
 
     st.warning(
-        "This is a portfolio authentication demo. "
-        "Do not use real medical or sensitive customer data."
+        "This is a portfolio authentication demo. It does not use "
+        "production-grade security. Do not enter real medical or "
+        "sensitive personal data."
     )
 
     st.stop()
@@ -284,13 +484,6 @@ if not st.session_state.get("logged_in", False):
 current_user = st.session_state.get("current_user", "User")
 current_email = ""
 
-try:
-    if hasattr(st, "user") and st.user.is_logged_in:
-        current_email = st.user.get("email", "")
-        current_user = st.user.get("name", current_email or "Google User")
-except Exception:
-    pass
-
 
 # =====================================================
 # SIDEBAR
@@ -300,9 +493,6 @@ with st.sidebar:
     st.title("CancerGuard AI")
 
     st.write(f"Logged in as: {current_user}")
-
-    if current_email:
-        st.caption(current_email)
 
     st.divider()
 
@@ -335,14 +525,13 @@ with st.sidebar:
 
     if st.button("Logout", width="stretch"):
 
+        if st.session_state.current_user:
+            clear_token(st.session_state.current_user)
+
         st.session_state.logged_in = False
         st.session_state.current_user = None
 
-        try:
-            if hasattr(st, "user") and st.user.is_logged_in:
-                st.logout()
-        except Exception:
-            pass
+        st.query_params.clear()
 
         st.rerun()
 
@@ -405,14 +594,6 @@ st.warning(
 # =====================================================
 with tab_home:
 
-    st.title("Your Health Dashboard")
-
-    st.subheader(f"Welcome back, {current_user}")
-
-    st.write("Track your healthy habits and improve your health awareness.")
-
-    st.divider()
-
     completed_habits = sum(
         [
             st.session_state.habit_diet,
@@ -422,6 +603,34 @@ with tab_home:
             st.session_state.habit_screening
         ]
     )
+
+    dashboard_strip(
+        current_user,
+        [
+            {
+                "label": "Awareness",
+                "value": f"{st.session_state.awareness_score}",
+                "percent": st.session_state.awareness_score
+            },
+            {
+                "label": "Water",
+                "value": f"{st.session_state.water}/8",
+                "percent": min(st.session_state.water / 8 * 100, 100)
+            },
+            {
+                "label": "Exercise",
+                "value": f"{st.session_state.exercise}m",
+                "percent": min(st.session_state.exercise / 30 * 100, 100)
+            },
+            {
+                "label": "Habits",
+                "value": f"{completed_habits}/5",
+                "percent": completed_habits / 5 * 100
+            }
+        ]
+    )
+
+    st.divider()
 
     react_stat_cards([
         {
@@ -545,7 +754,11 @@ with tab_home:
 # =====================================================
 with tab_prevention:
 
-    st.title("Prevention Awareness")
+    image_banner(
+        "prevention",
+        "Prevention Awareness",
+        "Around four in ten cancers are linked to preventable causes."
+    )
 
     st.write(
         "This calculator provides a general educational awareness profile."
@@ -951,12 +1164,10 @@ with tab_prevention:
 # =====================================================
 with tab_lifestyle:
 
-    st.title("Healthy Living")
-
-    st.image(
-        "https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=1000&q=80",
-        caption="Small daily habits support a healthy lifestyle",
-        width="stretch"
+    image_banner(
+        "walking",
+        "Healthy Living",
+        "Small daily habits build lasting protection."
     )
 
     st.write("Track simple daily habits that support general health.")
@@ -964,6 +1175,12 @@ with tab_lifestyle:
     st.divider()
 
     st.subheader("Water Intake")
+
+    framed_image(
+        "water",
+        "Hydration supports overall health",
+        height=230
+    )
 
     st.slider(
         "Glasses of water today",
@@ -987,6 +1204,12 @@ with tab_lifestyle:
 
     st.subheader("Exercise")
 
+    framed_image(
+        "running",
+        "Aim for 150 minutes of activity each week",
+        height=230
+    )
+
     st.slider(
         "Minutes of exercise today",
         min_value=0,
@@ -1006,6 +1229,12 @@ with tab_lifestyle:
     st.divider()
 
     st.subheader("Sleep")
+
+    framed_image(
+        "sleep",
+        "Consistent rest supports recovery and wellbeing",
+        height=230
+    )
 
     st.slider(
         "Hours of sleep last night",
@@ -1061,7 +1290,11 @@ with tab_lifestyle:
 # =====================================================
 with tab_goals:
 
-    st.title("Prevention Goals and Progress")
+    image_banner(
+        "goals",
+        "Prevention Goals and Progress",
+        "Set achievable steps and track your progress over time."
+    )
 
     goal_options = [
         "Exercise for 30 minutes",
@@ -1184,7 +1417,11 @@ with tab_goals:
 # =====================================================
 with tab_challenge:
 
-    st.title("Weekly Prevention Challenge")
+    image_banner(
+        "sunrise",
+        "Weekly Prevention Challenge",
+        "One small change each week builds a lasting habit."
+    )
 
     challenge_list = {
         1: (
@@ -1209,6 +1446,14 @@ with tab_challenge:
         )
     }
 
+    challenge_images = {
+        1: "vegetables",
+        2: "walking",
+        3: "sunlight",
+        4: "water",
+        5: "clinic"
+    }
+
     current_challenge_number = (
         (st.session_state.challenge_week - 1) % len(challenge_list)
     ) + 1
@@ -1221,7 +1466,11 @@ with tab_challenge:
         f"Week {current_challenge_number}: {challenge_title}"
     )
 
-    st.write(challenge_description)
+    framed_image(
+        challenge_images[current_challenge_number],
+        challenge_description,
+        height=280
+    )
 
     if not st.session_state.challenge_done:
 
@@ -1250,12 +1499,10 @@ with tab_challenge:
 # =====================================================
 with tab_learn:
 
-    st.title("Cancer Awareness and Education")
-
-    st.image(
-        "https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=1000&q=80",
-        caption="Health education supports informed decisions",
-        width="stretch"
+    image_banner(
+        "education",
+        "Cancer Awareness and Education",
+        "Reliable information supports informed health decisions."
     )
 
     st.write(
@@ -1301,6 +1548,12 @@ with tab_learn:
     st.divider()
 
     st.subheader("Cancer Awareness Centre")
+
+    framed_image(
+        "library",
+        "Plain-language information on common cancer types",
+        height=250
+    )
 
     cancer_choice = st.selectbox(
         "Select a cancer type to learn about",
@@ -1511,7 +1764,11 @@ with tab_learn:
 # =====================================================
 with tab_detect:
 
-    st.title("Detect Early")
+    image_banner(
+        "clinic",
+        "Detect Early",
+        "Recognising changes early supports timely medical assessment."
+    )
 
     st.warning(
         "This section provides symptom education only. It cannot tell you "
@@ -1630,7 +1887,7 @@ with tab_detect:
 
             screening_table = pd.DataFrame(results)
 
-            st.dataframe(screening_table, width="stretch")
+            render_table(screening_table)
 
             if screen_country.strip():
                 st.info(
@@ -1650,7 +1907,11 @@ with tab_detect:
 # =====================================================
 with tab_assistant:
 
-    st.title("CancerGuard AI Assistant")
+    image_banner(
+        "data",
+        "CancerGuard AI Assistant",
+        "Answers grounded in a curated cancer education knowledge base."
+    )
 
     st.info(
         "This assistant answers from a curated cancer education knowledge "
@@ -1731,7 +1992,11 @@ with tab_assistant:
 # =====================================================
 with tab_care:
 
-    st.title("Navigate Care")
+    image_banner(
+        "support",
+        "Navigate Care",
+        "Understanding the pathway from awareness to survivorship."
+    )
 
     care_journey_tab, care_find_tab, care_support_tab = st.tabs(
         ["Care Journey", "Find Care", "Support Centre"]
@@ -1740,6 +2005,12 @@ with tab_care:
     with care_journey_tab:
 
         st.subheader("From awareness to survivorship")
+
+        framed_image(
+            "path",
+            "Each stage of the care pathway explained",
+            height=250
+        )
 
         st.write(
             "Understanding the pathway can reduce uncertainty after a symptom "
@@ -1763,6 +2034,12 @@ with tab_care:
 
         st.subheader("Find care")
 
+        framed_image(
+            "clinic",
+            "Confirm services before travelling",
+            height=250
+        )
+
         st.write(
             "This pilot directory covers selected Nigerian states. Always "
             "confirm services and opening hours before travelling."
@@ -1778,7 +2055,7 @@ with tab_care:
 
         facility_table = pd.DataFrame(facilities)
 
-        st.dataframe(facility_table, width="stretch")
+        render_table(facility_table)
 
         st.divider()
 
@@ -1795,6 +2072,12 @@ with tab_care:
     with care_support_tab:
 
         st.subheader("Support centre")
+
+        framed_image(
+            "hands",
+            "Support matters at every stage",
+            height=250
+        )
 
         support_choice = st.selectbox(
             "Select a topic",
@@ -1819,12 +2102,10 @@ with tab_care:
 # =====================================================
 with tab_research:
 
-    st.title("Educational ML Research Lab")
-
-    st.image(
-        "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=1000&q=80",
-        caption="Data-driven health education",
-        width="stretch"
+    image_banner(
+        "laboratory",
+        "Educational ML Research Lab",
+        "Machine learning demonstrated on public research data."
     )
 
     st.info(
@@ -1852,7 +2133,7 @@ with tab_research:
         f"{cancer_dataset.shape[1] - 1} features."
     )
 
-    st.dataframe(cancer_dataset.head())
+    render_table(cancer_dataset.head())
 
     features = cancer_dataset.drop(columns=["diagnosis"])
     target = cancer_dataset["diagnosis"]
@@ -1953,12 +2234,13 @@ with tab_research:
 # =====================================================
 with tab_profile:
 
-    st.title("My Profile")
+    image_banner(
+        "community",
+        "My Profile",
+        "Your personal details and achievements."
+    )
 
     st.success(f"Logged in as: {current_user}")
-
-    if current_email:
-        st.caption(current_email)
 
     st.divider()
 
