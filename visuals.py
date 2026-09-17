@@ -637,59 +637,109 @@ def react_progress_rings(rings, height=220):
 # =====================================================
 # TABLE RENDERER (no pyarrow required)
 # =====================================================
-def render_table(dataframe):
-    """Render a DataFrame as an HTML table without pyarrow."""
-    html = dataframe.to_html(
+def render_table(dataframe, max_columns=12, height=None):
+    """
+    Render a DataFrame as an HTML table without pyarrow.
+    Wide tables are truncated and rendered in a scrollable iframe.
+    """
+    frame = dataframe.copy()
+
+    truncated = False
+
+    if frame.shape[1] > max_columns:
+        frame = frame.iloc[:, :max_columns]
+        truncated = True
+
+    table_html = frame.to_html(
         index=False,
         border=0,
         classes="cg-table",
         escape=True
     )
 
-    style = """
+    note = ""
+
+    if truncated:
+        note = (
+            f"<div class='cg-note'>Showing first {max_columns} of "
+            f"{dataframe.shape[1]} columns.</div>"
+        )
+
+    row_height = 38
+    computed = height or min(
+        620,
+        140 + (len(frame) * row_height)
+    )
+
+    html = f"""
     <style>
-    .cg-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-family: 'Inter', sans-serif;
-        font-size: 14px;
-        border-radius: 10px;
-        overflow: hidden;
-        border: 1px solid #E2E8F0;
-    }
-    .cg-table th {
-        background: linear-gradient(135deg, #EC4899 0%, #BE185D 100%);
-        color: #FFFFFF;
-        text-align: left;
-        padding: 11px 13px;
-        font-weight: 700;
-    }
-    .cg-table td {
-        padding: 10px 13px;
-        border-bottom: 1px solid #E2E8F0;
-        color: #0F172A;
-        background: #FFFFFF;
-    }
-    .cg-table tr:nth-child(even) td {
-        background: #F8FAFC;
-    }
-    .cg-table tr:hover td {
-        background: #FDF2F8;
-    }
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+      body {{
+          margin: 0;
+          font-family: 'Inter', sans-serif;
+      }}
+      .cg-scroll {{
+          overflow-x: auto;
+          border: 1px solid #E2E8F0;
+          border-radius: 10px;
+          background: #FFFFFF;
+      }}
+      .cg-table {{
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 13px;
+          white-space: nowrap;
+      }}
+      .cg-table th {{
+          background: linear-gradient(135deg, #EC4899 0%, #BE185D 100%);
+          color: #FFFFFF;
+          text-align: left;
+          padding: 11px 13px;
+          font-weight: 700;
+          position: sticky;
+          top: 0;
+      }}
+      .cg-table td {{
+          padding: 9px 13px;
+          border-bottom: 1px solid #E2E8F0;
+          color: #0F172A;
+          background: #FFFFFF;
+      }}
+      .cg-table tr:nth-child(even) td {{
+          background: #F8FAFC;
+      }}
+      .cg-table tr:hover td {{
+          background: #FDF2F8;
+      }}
+      .cg-note {{
+          padding: 9px 13px;
+          font-size: 12px;
+          color: #64748B;
+          background: #F8FAFC;
+          border-top: 1px solid #E2E8F0;
+      }}
     </style>
+
+    <div class="cg-scroll">
+      {table_html}
+      {note}
+    </div>
     """
 
-    st.markdown(style + html, unsafe_allow_html=True)
+    _render_html(html, computed)
 
-
-# =====================================================
+    # =====================================================
 # PLOTLY THEME HELPER
 # =====================================================
 def style_chart(fig):
     """Apply a consistent clean theme to any Plotly figure."""
     fig.update_layout(
         template="plotly_white",
-        font=dict(family="Inter, sans-serif", size=13, color="#334155"),
+        font=dict(
+            family="Inter, sans-serif",
+            size=13,
+            color="#334155"
+        ),
         title_font=dict(size=17, color="#0F172A"),
         margin=dict(l=20, r=20, t=55, b=20),
         paper_bgcolor="rgba(0,0,0,0)",

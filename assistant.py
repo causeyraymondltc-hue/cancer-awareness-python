@@ -233,3 +233,55 @@ def answer_question(question):
 
 def get_disclaimer():
     return DISCLAIMER
+# =====================================================
+# KNOWLEDGE BASE SEARCH
+# =====================================================
+def search_knowledge(query):
+    """Return every knowledge entry matching a free-text query."""
+    if not query or len(query.strip()) < 2:
+        return []
+
+    term = query.strip().lower()
+    results = []
+
+    for name, data in CANCER_LIBRARY.items():
+
+        haystack = " ".join([
+            name,
+            data["what_it_is"],
+            " ".join(data["risk_factors"]),
+            " ".join(data["prevention"]),
+            " ".join(data["warning_signs"]),
+            data["screening"]
+        ]).lower()
+
+        if term in haystack:
+            results.append({
+                "kind": "Cancer type",
+                "title": name,
+                "text": data["what_it_is"]
+            })
+
+    for symptom, guide in SYMPTOM_GUIDE.items():
+
+        combined = (symptom + " " + guide["explanation"]).lower()
+
+        if term in combined:
+            results.append({
+                "kind": "Symptom guidance",
+                "title": symptom,
+                "text": guide["explanation"]
+            })
+
+    for myth in MYTHS:
+
+        combined = (myth["claim"] + " " + myth["explanation"]).lower()
+
+        if term in combined:
+            results.append({
+                "kind": f"Myth check — {myth['verdict']}",
+                "title": myth["claim"],
+                "text": myth["explanation"]
+            })
+
+    return results

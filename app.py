@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
-import random
 import json
 import os
 import hashlib
 import secrets
+from datetime import date
 
 from sklearn.datasets import load_breast_cancer
 from sklearn.model_selection import train_test_split
@@ -31,6 +31,12 @@ from cancer_content import (
 
 from assistant import answer_question
 
+try:
+    from assistant import search_knowledge
+except ImportError:
+    def search_knowledge(query):
+        return []
+
 from visuals import (
     GLOBAL_CSS,
     ANIMATED_BACKGROUND,
@@ -40,6 +46,25 @@ from visuals import (
     react_progress_rings,
     style_chart,
     render_table
+)
+
+from storage import (
+    load_progress,
+    save_progress,
+    apply_daily_rollover,
+    daily_index,
+    award_xp,
+    xp_level,
+    personal_comparison,
+    update_best_streak,
+    weekly_summary,
+    DEFAULT_PROGRESS
+)
+
+from insights import (
+    generate_insights,
+    daily_prompt,
+    unlock_content
 )
 
 from images import image_banner, framed_image
@@ -73,28 +98,60 @@ SECURITY_QUESTIONS = [
 
 
 def hash_value(value):
+    """Hash a security answer."""
     return hashlib.sha256(
         value.strip().lower().encode("utf-8")
     ).hexdigest()
 
 
-def hash_password(password):
-    return hashlib.sha256(
-        password.encode("utf-8")
-    ).hexdigest()
+def hash_password(password, salt=None):
+    """PBKDF2 with a random salt. Returns 'salt$hash'."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt.encode("utf-8"),
+        200_000
+    ).hex()
+
+    return f"{salt}${digest}"
+
+
+def verify_password(password, stored):
+    """Check a password. Supports legacy unsalted SHA-256 records."""
+    if not stored:
+        return False
+
+    if "$" not in stored:
+        legacy = hashlib.sha256(
+            password.encode("utf-8")
+        ).hexdigest()
+        return secrets.compare_digest(legacy, stored)
+
+    salt = stored.split("$", 1)[0]
+    return secrets.compare_digest(
+        hash_password(password, salt),
+        stored
+    )
+
+
+def default_users():
+    return {
+        "demo": {
+            "password": hash_password("password"),
+            "question": SECURITY_QUESTIONS[0],
+            "answer": hash_value("demo school"),
+            "token": ""
+        }
+    }
 
 
 def load_users():
     """Load users. Supports old string format and new dict format."""
     if not os.path.exists(USER_FILE):
-        return {
-            "demo": {
-                "password": hash_password("password"),
-                "question": SECURITY_QUESTIONS[0],
-                "answer": hash_value("demo school"),
-                "token": ""
-            }
-        }
+        return default_users()
 
     try:
         with open(USER_FILE, "r", encoding="utf-8") as file:
@@ -106,10 +163,7 @@ def load_users():
 
             if isinstance(record, str):
                 converted[username] = {
-                    "password": (
-                        record if len(record) == 64
-                        else hash_password(record)
-                    ),
+                    "password": record,
                     "question": SECURITY_QUESTIONS[0],
                     "answer": "",
                     "token": ""
@@ -127,14 +181,7 @@ def load_users():
         return converted
 
     except Exception:
-        return {
-            "demo": {
-                "password": hash_password("password"),
-                "question": SECURITY_QUESTIONS[0],
-                "answer": hash_value("demo school"),
-                "token": ""
-            }
-        }
+        return default_users()
 
 
 def save_users(users):
@@ -171,39 +218,20 @@ def clear_token(username):
 # =====================================================
 # SESSION STATE
 # =====================================================
-default_values = {
+session_defaults = {
     "users": load_users(),
     "logged_in": False,
     "current_user": None,
-
-    "goals": [],
-    "score_history": [],
-    "badges": [],
+    "loaded_for": None,
     "chat_history": [],
-    "demo_group": "Prefer not to say",
-
-    "water": 0,
-    "exercise": 0,
-    "sleep": 7.0,
-
-    "habit_diet": False,
-    "habit_tobacco": False,
-    "habit_activity": False,
-    "habit_sun": False,
-    "habit_screening": False,
-
-    "awareness_score": 0,
-
-    "full_name": "",
-    "profile_age": 30,
-    "health_goal": "Improve my diet",
-
-    "daily_quote": None,
-    "challenge_week": 1,
-    "challenge_done": False
+    "demo_group": "Prefer not to say"
 }
 
-for key, value in default_values.items():
+for key, value in session_defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
+
+for key, value in DEFAULT_PROGRESS.items():
     if key not in st.session_state:
         st.session_state[key] = value
 
@@ -268,11 +296,17 @@ if not st.session_state.get("logged_in", False):
             if login_button:
 
                 username = username_input.strip()
-                entered = hash_password(password_input)
-
                 record = st.session_state.users.get(username)
 
-                if record and record.get("password") == entered:
+                if record and verify_password(
+                    password_input, record.get("password", "")
+                ):
+
+                    if "$" not in record.get("password", ""):
+                        st.session_state.users[username]["password"] = (
+                            hash_password(password_input)
+                        )
+                        save_users(st.session_state.users)
 
                     st.session_state.logged_in = True
                     st.session_state.current_user = username
@@ -479,10 +513,48 @@ if not st.session_state.get("logged_in", False):
 
 
 # =====================================================
-# CURRENT USER
+# CURRENT USER AND SAVED PROGRESS
 # =====================================================
 current_user = st.session_state.get("current_user", "User")
-current_email = ""
+
+if st.session_state.loaded_for != current_user:
+
+    saved_record = load_progress(current_user)
+    saved_record, rolled_over = apply_daily_rollover(saved_record)
+    saved_record = update_best_streak(saved_record)
+
+    for key, value in saved_record.items():
+        st.session_state[key] = value
+
+    st.session_state.loaded_for = current_user
+    st.session_state.chat_history = []
+
+    save_progress(current_user, saved_record)
+
+    if rolled_over:
+        st.toast("New day. Daily habits have been reset.")
+
+
+def persist():
+    """Write current session values back to disk."""
+    record = {
+        key: st.session_state.get(key, default)
+        for key, default in DEFAULT_PROGRESS.items()
+    }
+
+    record = update_best_streak(record)
+
+    st.session_state.best_streak = record.get("best_streak", 0)
+
+    save_progress(current_user, record)
+
+
+def current_record():
+    """Snapshot the current progress values."""
+    return {
+        key: st.session_state.get(key, default)
+        for key, default in DEFAULT_PROGRESS.items()
+    }
 
 
 # =====================================================
@@ -494,9 +566,32 @@ with st.sidebar:
 
     st.write(f"Logged in as: {current_user}")
 
+    st.caption(date.today().strftime("%A, %d %B %Y"))
+
     st.divider()
 
-    st.caption("Your health awareness companion")
+    streak_days = st.session_state.get("streak", 0)
+    best_days = st.session_state.get("best_streak", 0)
+    total_xp = st.session_state.get("xp", 0)
+
+    st.metric(
+        "Daily Streak",
+        f"{streak_days} day{'s' if streak_days != 1 else ''}",
+        f"Best: {best_days}"
+    )
+
+    st.caption(
+        personal_comparison({
+            "streak": streak_days,
+            "best_streak": best_days
+        })
+    )
+
+    st.metric(
+        "Level",
+        xp_level(total_xp),
+        f"{total_xp} XP"
+    )
 
     st.divider()
 
@@ -525,11 +620,14 @@ with st.sidebar:
 
     if st.button("Logout", width="stretch"):
 
+        persist()
+
         if st.session_state.current_user:
             clear_token(st.session_state.current_user)
 
         st.session_state.logged_in = False
         st.session_state.current_user = None
+        st.session_state.loaded_for = None
 
         st.query_params.clear()
 
@@ -608,6 +706,13 @@ with tab_home:
         current_user,
         [
             {
+                "label": "Streak",
+                "value": f"{st.session_state.get('streak', 0)}d",
+                "percent": min(
+                    st.session_state.get("streak", 0) / 7 * 100, 100
+                )
+            },
+            {
                 "label": "Awareness",
                 "value": f"{st.session_state.awareness_score}",
                 "percent": st.session_state.awareness_score
@@ -618,16 +723,175 @@ with tab_home:
                 "percent": min(st.session_state.water / 8 * 100, 100)
             },
             {
-                "label": "Exercise",
-                "value": f"{st.session_state.exercise}m",
-                "percent": min(st.session_state.exercise / 30 * 100, 100)
-            },
-            {
                 "label": "Habits",
                 "value": f"{completed_habits}/5",
                 "percent": completed_habits / 5 * 100
             }
         ]
+    )
+
+    st.caption(date.today().strftime("%A, %d %B %Y"))
+
+    st.divider()
+
+    # -------------------------------------------------
+    # DAILY CHECK-IN
+    # -------------------------------------------------
+    today_iso = date.today().isoformat()
+
+    already_checked_in = (
+        st.session_state.get("checked_in_date") == today_iso
+    )
+
+    if not already_checked_in:
+
+        with st.container(border=True):
+
+            st.subheader("Daily Check-In")
+
+            st.caption(
+                "Optional. Takes about thirty seconds and earns 10 XP."
+            )
+
+            with st.form("daily_checkin"):
+
+                mood = st.select_slider(
+                    "How are you feeling today?",
+                    options=[
+                        "Struggling",
+                        "Low",
+                        "Okay",
+                        "Good",
+                        "Strong"
+                    ],
+                    value="Okay"
+                )
+
+                took_action = st.checkbox(
+                    "I took at least one health action today"
+                )
+
+                st.write(daily_prompt(daily_index()))
+
+                priority = st.text_input(
+                    "Your answer (optional)"
+                )
+
+                checkin_submit = st.form_submit_button(
+                    "Complete Check-In"
+                )
+
+                if checkin_submit:
+
+                    st.session_state.mood_log[today_iso] = mood
+                    st.session_state.priority_today = priority.strip()
+                    st.session_state.checked_in_date = today_iso
+                    st.session_state.total_checkins = (
+                        st.session_state.get("total_checkins", 0) + 1
+                    )
+
+                    award_xp(st.session_state, 10)
+
+                    if took_action:
+                        award_xp(st.session_state, 5)
+
+                    persist()
+
+                    st.rerun()
+
+    else:
+
+        with st.container(border=True):
+
+            st.subheader("Check-In Complete")
+
+            st.write(
+                "Mood today: "
+                f"{st.session_state.mood_log.get(today_iso, 'Not set')}"
+            )
+
+            if st.session_state.get("priority_today"):
+                st.write(
+                    f"Your focus: {st.session_state.priority_today}"
+                )
+
+            st.caption(
+                personal_comparison({
+                    "streak": st.session_state.get("streak", 0),
+                    "best_streak": st.session_state.get("best_streak", 0)
+                })
+            )
+
+    st.divider()
+
+    # -------------------------------------------------
+    # TODAY'S UNLOCK
+    # -------------------------------------------------
+    st.subheader("Today's Unlock")
+
+    todays_content = unlock_content(
+        daily_index(),
+        st.session_state.get("rewards_claimed", [])
+    )
+
+    if todays_content["already_claimed"]:
+
+        with st.container(border=True):
+            st.write(f"**{todays_content['title']}**")
+            st.write(todays_content["text"])
+            st.caption("Unlocked. A new topic appears tomorrow.")
+
+    else:
+
+        with st.container(border=True):
+
+            st.write(f"**{todays_content['title']}**")
+
+            st.caption("Available today. Unlocking earns 5 XP.")
+
+            if st.button("Unlock this topic"):
+
+                st.session_state.rewards_claimed.append(
+                    todays_content["id"]
+                )
+
+                award_xp(st.session_state, 5)
+                persist()
+                st.rerun()
+
+    st.divider()
+
+    # -------------------------------------------------
+    # TODAY'S FOCUS
+    # -------------------------------------------------
+    st.subheader("Today's Focus")
+
+    quotes = [
+        "Small steps every day lead to big changes.",
+        "Your health is an investment, not an expense.",
+        "Prevention today can support a healthier future.",
+        "Knowledge helps people make informed decisions.",
+        "Every healthy choice matters.",
+        "Progress is more important than perfection.",
+        "A healthy lifestyle is built one habit at a time."
+    ]
+
+    micro_tips = [
+        "Swap one sugary drink for water today.",
+        "Take a ten-minute walk after a meal.",
+        "Add one extra vegetable to dinner.",
+        "Check the UV forecast before going outside.",
+        "Note any body change you have noticed this week.",
+        "Ask a family member about their health history.",
+        "Set a reminder for your next check-up."
+    ]
+
+    today_index = daily_index()
+
+    st.info(quotes[today_index % len(quotes)])
+
+    st.caption(
+        f"Today's action: {micro_tips[today_index % len(micro_tips)]}"
     )
 
     st.divider()
@@ -665,39 +929,6 @@ with tab_home:
 
     st.divider()
 
-    st.subheader("Today's Health Tip")
-
-    st.success(
-        "Avoid tobacco, stay physically active, maintain a balanced diet, "
-        "protect your skin from excessive ultraviolet exposure, and follow "
-        "appropriate screening guidance from a healthcare professional."
-    )
-
-    st.divider()
-
-    st.subheader("Daily Motivation")
-
-    quotes = [
-        "Small steps every day lead to big changes.",
-        "Your health is an investment, not an expense.",
-        "Prevention today can support a healthier future.",
-        "Knowledge helps people make informed decisions.",
-        "Every healthy choice matters.",
-        "Progress is more important than perfection.",
-        "A healthy lifestyle is built one habit at a time."
-    ]
-
-    if st.session_state.daily_quote is None:
-        st.session_state.daily_quote = random.choice(quotes)
-
-    st.info(st.session_state.daily_quote)
-
-    if st.button("New Quote"):
-        st.session_state.daily_quote = random.choice(quotes)
-        st.rerun()
-
-    st.divider()
-
     st.subheader("Healthy Living Progress")
 
     react_progress_rings([
@@ -723,30 +954,110 @@ with tab_home:
         }
     ])
 
-    progress_data = pd.DataFrame(
-        {
-            "Habit": ["Water", "Exercise", "Sleep", "Daily Habits"],
-            "Progress": [
-                min(st.session_state.water / 8 * 100, 100),
-                min(st.session_state.exercise / 30 * 100, 100),
-                min(st.session_state.sleep / 7 * 100, 100),
-                completed_habits / 5 * 100
-            ]
-        }
+    st.divider()
+
+    # -------------------------------------------------
+    # INSIGHTS
+    # -------------------------------------------------
+    st.subheader("Your Insights")
+
+    st.caption(
+        "These describe your logged behaviour. They do not assess "
+        "or predict any medical outcome."
     )
 
-    progress_chart = px.bar(
-        progress_data,
-        x="Habit",
-        y="Progress",
-        range_y=[0, 100],
-        color="Habit",
-        title="Today's Healthy Living Progress"
-    )
+    insight_list = generate_insights(current_record())
 
-    progress_chart = style_chart(progress_chart)
+    for insight in insight_list:
 
-    st.plotly_chart(progress_chart, width="stretch")
+        with st.container(border=True):
+
+            st.write(f"**{insight['title']}**")
+
+            if insight["tone"] == "success":
+                st.success(insight["text"])
+            elif insight["tone"] == "warning":
+                st.warning(insight["text"])
+            else:
+                st.info(insight["text"])
+
+    st.divider()
+
+    # -------------------------------------------------
+    # WEEKLY SUMMARY
+    # -------------------------------------------------
+    st.subheader("Your Week")
+
+    summary = weekly_summary(current_record())
+
+    if not summary:
+        st.info(
+            "Your weekly summary appears after your first full "
+            "day of tracking."
+        )
+    else:
+
+        week_col1, week_col2, week_col3 = st.columns(3)
+
+        with week_col1:
+            st.metric(
+                "Average water",
+                f"{summary['avg_water']} glasses"
+            )
+
+        with week_col2:
+            st.metric(
+                "Total exercise",
+                f"{summary['total_exercise']} min"
+            )
+
+        with week_col3:
+            st.metric(
+                "Average habits",
+                f"{summary['avg_habits']}/5"
+            )
+
+        st.caption(
+            f"Your strongest day was {summary['best_day']}."
+        )
+
+    st.divider()
+
+    st.subheader("Recent Days")
+
+    history = st.session_state.get("history", {})
+
+    if not history:
+        st.info(
+            "Your daily history will appear here after your first "
+            "full day of tracking."
+        )
+    else:
+        recent_days = sorted(history.keys())[-7:]
+
+        history_frame = pd.DataFrame([
+            {
+                "Date": day,
+                "Water": history[day].get("water", 0),
+                "Exercise": history[day].get("exercise", 0),
+                "Habits": history[day].get("habits", 0)
+            }
+            for day in recent_days
+        ])
+
+        render_table(history_frame)
+
+        weekly_chart = px.bar(
+            history_frame,
+            x="Date",
+            y="Habits",
+            range_y=[0, 5],
+            title="Daily Habits Completed This Week"
+        )
+
+        weekly_chart = style_chart(weekly_chart)
+
+        st.plotly_chart(weekly_chart, width="stretch")
 
 
 # =====================================================
@@ -1111,6 +1422,10 @@ with tab_prevention:
         st.session_state.awareness_score = advanced_score
         st.session_state.score_history.append(advanced_score)
 
+        award_xp(st.session_state, 15)
+
+        persist()
+
         st.subheader(
             f"Advanced Awareness Profile: {advanced_score}/100"
         )
@@ -1172,6 +1487,11 @@ with tab_lifestyle:
 
     st.write("Track simple daily habits that support general health.")
 
+    st.caption(
+        "Daily values reset each morning. "
+        f"Current streak: {st.session_state.get('streak', 0)} day(s)."
+    )
+
     st.divider()
 
     st.subheader("Water Intake")
@@ -1186,7 +1506,8 @@ with tab_lifestyle:
         "Glasses of water today",
         min_value=0,
         max_value=15,
-        key="water"
+        key="water",
+        on_change=persist
     )
 
     water_value = st.session_state.water
@@ -1214,7 +1535,8 @@ with tab_lifestyle:
         "Minutes of exercise today",
         min_value=0,
         max_value=180,
-        key="exercise"
+        key="exercise",
+        on_change=persist
     )
 
     exercise_value = st.session_state.exercise
@@ -1241,7 +1563,8 @@ with tab_lifestyle:
         min_value=0.0,
         max_value=12.0,
         step=0.5,
-        key="sleep"
+        key="sleep",
+        on_change=persist
     )
 
     sleep_value = st.session_state.sleep
@@ -1255,16 +1578,34 @@ with tab_lifestyle:
 
     st.subheader("Daily Healthy Habits")
 
-    st.checkbox("Ate fruits and vegetables", key="habit_diet")
-    st.checkbox("Avoided tobacco", key="habit_tobacco")
-    st.checkbox("Completed physical activity", key="habit_activity")
+    st.checkbox(
+        "Ate fruits and vegetables",
+        key="habit_diet",
+        on_change=persist
+    )
+
+    st.checkbox(
+        "Avoided tobacco",
+        key="habit_tobacco",
+        on_change=persist
+    )
+
+    st.checkbox(
+        "Completed physical activity",
+        key="habit_activity",
+        on_change=persist
+    )
+
     st.checkbox(
         "Protected myself from excessive sun exposure",
-        key="habit_sun"
+        key="habit_sun",
+        on_change=persist
     )
+
     st.checkbox(
         "Stayed up to date with health checks",
-        key="habit_screening"
+        key="habit_screening",
+        on_change=persist
     )
 
     daily_habit_total = sum(
@@ -1336,6 +1677,8 @@ with tab_goals:
                 {"goal": custom_goal.strip(), "done": False}
             )
 
+        persist()
+
         st.success("Goals added.")
         st.rerun()
 
@@ -1358,7 +1701,9 @@ with tab_goals:
                 key=f"goal_status_{index}"
             )
 
-            st.session_state.goals[index]["done"] = goal_status
+            if goal_status != st.session_state.goals[index]["done"]:
+                st.session_state.goals[index]["done"] = goal_status
+                persist()
 
             if goal_status:
                 completed_goal_count += 1
@@ -1376,6 +1721,7 @@ with tab_goals:
 
         if st.button("Clear All Goals"):
             st.session_state.goals = []
+            persist()
             st.rerun()
 
     st.divider()
@@ -1476,7 +1822,9 @@ with tab_challenge:
 
         if st.button("Mark Challenge Complete"):
             st.session_state.challenge_done = True
-            st.success("Challenge completed.")
+            award_xp(st.session_state, 25)
+            persist()
+            st.success("Challenge completed. 25 XP earned.")
 
     else:
 
@@ -1485,6 +1833,7 @@ with tab_challenge:
         if st.button("Start Next Challenge"):
             st.session_state.challenge_week += 1
             st.session_state.challenge_done = False
+            persist()
             st.rerun()
 
     st.divider()
@@ -1661,7 +2010,11 @@ with tab_learn:
 
     st.subheader("Knowledge Quiz")
 
-    quiz_questions = [
+    st.caption(
+        "Questions rotate daily. Correct answers earn XP every time."
+    )
+
+    quiz_bank = [
         {
             "question": "Which habit can reduce the risk of several cancers?",
             "options": [
@@ -1693,7 +2046,7 @@ with tab_learn:
             "answer": "Using shade and protective clothing"
         },
         {
-            "question": "What does family history mean?",
+            "question": "What does a family history of cancer mean?",
             "options": [
                 "Cancer is guaranteed",
                 "It may be useful to discuss screening with a doctor",
@@ -1701,7 +2054,95 @@ with tab_learn:
                 "It has no relevance"
             ],
             "answer": "It may be useful to discuss screening with a doctor"
+        },
+        {
+            "question": "What is the largest preventable cause of cancer?",
+            "options": [
+                "Tobacco use",
+                "Drinking tea",
+                "Using a mobile phone",
+                "Eating breakfast"
+            ],
+            "answer": "Tobacco use"
+        },
+        {
+            "question": "What is the purpose of cancer screening?",
+            "options": [
+                "To treat cancer",
+                "To find changes before symptoms appear",
+                "To replace a doctor",
+                "To confirm a cure"
+            ],
+            "answer": "To find changes before symptoms appear"
+        },
+        {
+            "question": "How long should a mouth ulcer be checked after?",
+            "options": [
+                "Two days",
+                "One week",
+                "Three weeks or more",
+                "Never"
+            ],
+            "answer": "Three weeks or more"
+        },
+        {
+            "question": "Which infection is linked to liver cancer risk?",
+            "options": [
+                "Hepatitis B",
+                "Common cold",
+                "Chickenpox",
+                "Measles"
+            ],
+            "answer": "Hepatitis B"
+        },
+        {
+            "question": "Does a biopsy cause cancer to spread?",
+            "options": [
+                "Yes, always",
+                "No, it is a standard diagnostic procedure",
+                "Only in adults",
+                "Only in children"
+            ],
+            "answer": "No, it is a standard diagnostic procedure"
+        },
+        {
+            "question": "Can cancer be passed from person to person?",
+            "options": [
+                "Yes, by touching",
+                "Yes, by sharing food",
+                "No, cancer is not contagious",
+                "Yes, by talking"
+            ],
+            "answer": "No, cancer is not contagious"
+        },
+        {
+            "question": "Which reduces bowel cancer risk?",
+            "options": [
+                "A high-fibre diet",
+                "Eating processed meat daily",
+                "Avoiding all vegetables",
+                "Skipping screening"
+            ],
+            "answer": "A high-fibre diet"
+        },
+        {
+            "question": "Is pain always present in early cancer?",
+            "options": [
+                "Yes, always",
+                "No, many early cancers cause no pain",
+                "Only at night",
+                "Only after exercise"
+            ],
+            "answer": "No, many early cancers cause no pain"
         }
+    ]
+
+    quiz_seed = daily_index()
+    quiz_start = quiz_seed % len(quiz_bank)
+
+    quiz_questions = [
+        quiz_bank[(quiz_start + offset) % len(quiz_bank)]
+        for offset in range(4)
     ]
 
     with st.form("knowledge_quiz_form"):
@@ -1717,7 +2158,7 @@ with tab_learn:
             selected_answer = st.radio(
                 "Choose one answer",
                 question["options"],
-                key=f"quiz_question_{question_number}"
+                key=f"quiz_{quiz_seed}_{question_number}"
             )
 
             quiz_answers.append(selected_answer)
@@ -1734,23 +2175,31 @@ with tab_learn:
 
         quiz_percentage = quiz_score / len(quiz_questions)
 
+        earned_xp = quiz_score * 10
+
+        new_level = award_xp(st.session_state, earned_xp)
+
+        if quiz_percentage == 1:
+            badge = "Perfect Score"
+        elif quiz_percentage >= 0.5:
+            badge = "Well Informed"
+        else:
+            badge = "Keep Learning"
+
+        if badge not in st.session_state.badges:
+            st.session_state.badges.append(badge)
+
+        persist()
+
         st.subheader(
             f"Quiz Score: {quiz_score}/{len(quiz_questions)}"
         )
 
         st.progress(quiz_percentage)
 
-        if quiz_percentage == 1:
-            badge = "Gold: Prevention Expert"
-        elif quiz_percentage >= 0.5:
-            badge = "Silver: Well Informed"
-        else:
-            badge = "Bronze: Keep Learning"
-
-        if badge not in st.session_state.badges:
-            st.session_state.badges.append(badge)
-
-        st.success(f"Achievement earned: {badge}")
+        st.success(
+            f"{earned_xp} XP earned. Current level: {new_level}."
+        )
 
         st.subheader("Correct Answers")
 
@@ -1919,6 +2368,34 @@ with tab_assistant:
         "opinions."
     )
 
+    st.subheader("Search the knowledge base")
+
+    search_term = st.text_input(
+        "Enter any word or phrase",
+        key="kb_search"
+    )
+
+    if search_term.strip():
+
+        matches = search_knowledge(search_term)
+
+        if matches:
+            st.caption(f"{len(matches)} result(s) found.")
+
+            for match in matches:
+                with st.expander(
+                    f"{match['kind']}: {match['title']}"
+                ):
+                    st.write(match["text"])
+                    st.caption(SOURCES)
+        else:
+            st.info(
+                "No matches found. Try a different word, such as "
+                "'screening', 'lump', 'tobacco' or 'HPV'."
+            )
+
+    st.divider()
+
     st.subheader("Example questions")
 
     example_questions = [
@@ -2045,6 +2522,12 @@ with tab_care:
             "confirm services and opening hours before travelling."
         )
 
+        st.warning(
+            "Facilities listed here are curated, not self-registered. "
+            "CancerGuard AI does not verify individual practitioners and "
+            "does not provide consultations."
+        )
+
         state_choice = st.selectbox(
             "Select a state",
             list(CARE_FACILITIES.keys()),
@@ -2068,6 +2551,44 @@ with tab_care:
             "If you cannot reach a large hospital, start at your nearest "
             "primary health centre. They can arrange referral."
         )
+
+        st.divider()
+
+        st.subheader("Prepare for your appointment")
+
+        st.write(
+            "Write these down before you go. Taking notes to a "
+            "consultation helps you remember what to ask."
+        )
+
+        appointment_notes = st.text_area(
+            "What have you noticed, and when did it start?",
+            key="appointment_notes",
+            height=120
+        )
+
+        if appointment_notes.strip():
+
+            summary_text = "CancerGuard AI - Appointment Notes\n\n"
+            summary_text += f"Date prepared: {date.today().isoformat()}\n\n"
+            summary_text += "What I have noticed:\n"
+            summary_text += appointment_notes.strip() + "\n\n"
+            summary_text += "Questions to ask:\n"
+
+            for question in DOCTOR_QUESTIONS:
+                summary_text += f"- {question}\n"
+
+            summary_text += (
+                "\nThis note was prepared using an educational app. "
+                "It is not a medical assessment."
+            )
+
+            st.download_button(
+                "Download notes for your appointment",
+                data=summary_text,
+                file_name="appointment_notes.txt",
+                mime="text/plain"
+            )
 
     with care_support_tab:
 
@@ -2133,7 +2654,36 @@ with tab_research:
         f"{cancer_dataset.shape[1] - 1} features."
     )
 
-    render_table(cancer_dataset.head())
+    render_table(
+        cancer_dataset.head(),
+        max_columns=8
+    )
+
+    st.divider()
+
+    st.subheader("Configure the experiment")
+
+    config_col1, config_col2 = st.columns(2)
+
+    with config_col1:
+        test_fraction = st.slider(
+            "Test set size",
+            min_value=0.1,
+            max_value=0.4,
+            value=0.2,
+            step=0.05,
+            key="ml_test_size"
+        )
+
+    with config_col2:
+        tree_count = st.slider(
+            "Number of trees",
+            min_value=20,
+            max_value=300,
+            value=150,
+            step=10,
+            key="ml_trees"
+        )
 
     features = cancer_dataset.drop(columns=["diagnosis"])
     target = cancer_dataset["diagnosis"]
@@ -2141,13 +2691,13 @@ with tab_research:
     x_train, x_test, y_train, y_test = train_test_split(
         features,
         target,
-        test_size=0.2,
+        test_size=test_fraction,
         random_state=42,
         stratify=target
     )
 
     research_model = RandomForestClassifier(
-        n_estimators=150,
+        n_estimators=tree_count,
         random_state=42
     )
 
@@ -2157,15 +2707,52 @@ with tab_research:
 
     model_accuracy = accuracy_score(y_test, predictions)
 
-    research_col1, research_col2 = st.columns(2)
+    true_positive = int(
+        ((predictions == 1) & (y_test == 1)).sum()
+    )
+    true_negative = int(
+        ((predictions == 0) & (y_test == 0)).sum()
+    )
+    false_positive = int(
+        ((predictions == 1) & (y_test == 0)).sum()
+    )
+    false_negative = int(
+        ((predictions == 0) & (y_test == 1)).sum()
+    )
 
-    with research_col1:
+    malignant_recall = (
+        true_negative / (true_negative + false_positive)
+        if (true_negative + false_positive) else 0
+    )
+
+    metric_col1, metric_col2, metric_col3 = st.columns(3)
+
+    with metric_col1:
         st.metric("Test Accuracy", f"{model_accuracy:.2%}")
 
-    with research_col2:
-        st.write("Dataset target meaning:")
-        st.write("0 represents malignant.")
-        st.write("1 represents benign.")
+    with metric_col2:
+        st.metric("Malignant Recall", f"{malignant_recall:.2%}")
+
+    with metric_col3:
+        st.metric("Missed Malignant", false_positive)
+
+    st.caption(
+        "In a medical context, recall on the malignant class matters more "
+        "than overall accuracy. A missed malignant case is far more "
+        "serious than a false alarm."
+    )
+
+    st.subheader("Confusion Matrix")
+
+    confusion_frame = pd.DataFrame(
+        {
+            "Predicted Malignant": [true_negative, false_negative],
+            "Predicted Benign": [false_positive, true_positive]
+        },
+        index=["Actually Malignant", "Actually Benign"]
+    ).reset_index().rename(columns={"index": ""})
+
+    render_table(confusion_frame)
 
     st.subheader("Important Features")
 
@@ -2244,6 +2831,41 @@ with tab_profile:
 
     st.divider()
 
+    profile_col1, profile_col2, profile_col3, profile_col4 = st.columns(4)
+
+    with profile_col1:
+        st.metric(
+            "Level",
+            xp_level(st.session_state.get("xp", 0))
+        )
+
+    with profile_col2:
+        st.metric(
+            "Total XP",
+            st.session_state.get("xp", 0)
+        )
+
+    with profile_col3:
+        st.metric(
+            "Streak",
+            f"{st.session_state.get('streak', 0)} days"
+        )
+
+    with profile_col4:
+        st.metric(
+            "Check-ins",
+            st.session_state.get("total_checkins", 0)
+        )
+
+    st.caption(
+        personal_comparison({
+            "streak": st.session_state.get("streak", 0),
+            "best_streak": st.session_state.get("best_streak", 0)
+        })
+    )
+
+    st.divider()
+
     st.subheader("Personal Information")
 
     st.text_input("Full Name", key="full_name")
@@ -2268,8 +2890,36 @@ with tab_profile:
         key="health_goal"
     )
 
+    st.text_input(
+        "Email for future digests",
+        key="email",
+        help="Stored locally. Daily digests are planned for v2."
+    )
+
     if st.button("Save Profile"):
-        st.success("Profile saved for this session.")
+        persist()
+        st.success("Profile saved to your account.")
+
+    st.divider()
+
+    st.subheader("Mood History")
+
+    mood_log = st.session_state.get("mood_log", {})
+
+    if not mood_log:
+        st.info(
+            "Your mood history appears after your first daily check-in."
+        )
+    else:
+
+        recent_moods = sorted(mood_log.keys())[-7:]
+
+        mood_frame = pd.DataFrame([
+            {"Date": day, "Mood": mood_log[day]}
+            for day in recent_moods
+        ])
+
+        render_table(mood_frame)
 
     st.divider()
 
@@ -2281,6 +2931,36 @@ with tab_profile:
     else:
         st.write("No badges yet. Complete the quiz in the Learn tab.")
 
+    st.divider()
+
+    st.subheader("Unlocked Topics")
+
+    claimed = st.session_state.get("rewards_claimed", [])
+
+    if claimed:
+        st.write(f"You have unlocked {len(claimed)} topic(s).")
+    else:
+        st.write("No topics unlocked yet. Check the Dashboard.")
+
+    st.divider()
+
+    st.subheader("Your Data")
+
+    st.caption(
+        "Your progress is stored in a JSON file on the server running "
+        "this app. It is not encrypted and is not shared. "
+        "Do not enter sensitive medical information."
+    )
+
+    export_payload = current_record()
+
+    st.download_button(
+        "Download my data",
+        data=json.dumps(export_payload, indent=4),
+        file_name=f"cancerguard_{current_user}.json",
+        mime="application/json"
+    )
+
 
 # =====================================================
 # FOOTER
@@ -2289,6 +2969,16 @@ st.divider()
 
 st.caption(
     "Educational awareness application. Not a medical product."
+)
+
+st.markdown(
+    """
+    <div class="app-footer">
+        Built by <strong>Toluwalope</strong><br>
+        CancerGuard AI
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 st.markdown(
